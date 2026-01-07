@@ -1,3 +1,3 @@
 module github.com/xhrobj/go-metrics-and-alerts
 
-go 1.21.4
+go 1.25.5
