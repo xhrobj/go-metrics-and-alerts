@@ -37,6 +37,13 @@ Content-Length: 11
 Content-Type: text/plain; charset=utf-8
 ```
 
+### Тесты
+
+curl -i -X POST http://localhost:8080/update/gauge/test/1.23
+curl -i -X POST http://localhost:8080/update/counter/test/10
+curl -i -X POST http://localhost:8080/update/counter/test/abc   # 400
+curl -i http://localhost:8080/update/gauge/test/1.23            # 405
+
 ---
 
 # go-musthave-metrics-tpl

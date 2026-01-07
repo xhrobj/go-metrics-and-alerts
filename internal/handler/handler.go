@@ -1,16 +1,23 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
-func UpdatePage(rw http.ResponseWriter, rq *http.Request) {
+type Handler struct {
+	repo *repository.MemStorage
+}
 
+func New(repo *repository.MemStorage) *Handler {
+	return &Handler{repo}
+}
+
+func (h *Handler) UpdatePage(rw http.ResponseWriter, rq *http.Request) {
 	// method must be POST
 	if rq.Method != http.MethodPost {
 		rw.WriteHeader(http.StatusMethodNotAllowed)
@@ -35,24 +42,22 @@ func UpdatePage(rw http.ResponseWriter, rq *http.Request) {
 
 	metricType, metricName, metricValue := parts[1], parts[2], parts[3]
 
-	// missing name -> 404
-	if metricName == "" {
-		rw.WriteHeader(http.StatusNotFound)
-		return
-	}
-
 	// invalid type or value -> 400
 	switch metricType {
 	case model.Gauge:
-		if _, err := strconv.ParseFloat(metricValue, 64); err != nil {
+		value, err := strconv.ParseFloat(metricValue, 64)
+		if err != nil {
 			rw.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		h.repo.UpdateGauge(metricName, value)
 	case model.Counter:
-		if _, err := strconv.ParseInt(metricValue, 10, 64); err != nil {
+		value, err := strconv.ParseInt(metricValue, 10, 64)
+		if err != nil {
 			rw.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		h.repo.UpdateCounter(metricName, value)
 	default:
 		rw.WriteHeader(http.StatusBadRequest)
 		return
@@ -61,5 +66,14 @@ func UpdatePage(rw http.ResponseWriter, rq *http.Request) {
 	// success
 	rw.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	rw.WriteHeader((http.StatusOK))
-	fmt.Fprintf(rw, "%s %s %s", metricType, metricName, metricValue)
+
+	/* fmt.Fprintf(rw, "-> %s %s %s\n", metricType, metricName, metricValue)
+	switch metricType {
+	case model.Gauge:
+		x, _ := h.repo.GetGauge(metricName)
+		fmt.Fprintf(rw, "<- %10.2f\n", x)
+	case model.Counter:
+		x, _ := h.repo.GetCounter(metricName)
+		fmt.Fprintf(rw, "<- %d\n", x)
+	} */
 }

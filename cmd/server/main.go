@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
 func main() {
@@ -13,8 +14,11 @@ func main() {
 }
 
 func run() error {
+	repo := repository.NewMemStorage()
+	h := handler.New(repo)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/update/", handler.UpdatePage)
-	mux.HandleFunc("/update", handler.UpdatePage) // NOTE: avoid redirect from `/update` -> `/update/`
+	mux.HandleFunc("/update/", h.UpdatePage)
+
 	return http.ListenAndServe(`localhost:8080`, mux)
 }
