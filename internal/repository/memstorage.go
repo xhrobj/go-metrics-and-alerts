@@ -37,3 +37,17 @@ func (m *MemStorage) GetCounter(name string) (int64, error) {
 	}
 	return value, nil
 }
+
+func (m *MemStorage) Snapshot() (gaugesCopy map[string]float64, countersCopy map[string]int64) {
+	gaugesCopy = make(map[string]float64, len(m.gauges))
+	for k, v := range m.gauges {
+		gaugesCopy[k] = v
+	}
+
+	countersCopy = make(map[string]int64, len(m.counters))
+	for k, v := range m.counters {
+		countersCopy[k] = v
+	}
+
+	return
+}

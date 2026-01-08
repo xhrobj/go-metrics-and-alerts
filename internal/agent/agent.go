@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
@@ -27,8 +26,4 @@ func (a *Agent) Run() {
 		time.Sleep(1 * time.Second)
 		a.uptime++
 	}
-}
-
-func (a *Agent) report() {
-	fmt.Printf("%d >>> report\n\n", a.uptime)
 }
