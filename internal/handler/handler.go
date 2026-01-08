@@ -11,10 +11,10 @@ import (
 )
 
 type Handler struct {
-	repo *repository.MemStorage
+	repo repository.ServerStorage
 }
 
-func New(repo *repository.MemStorage) *Handler {
+func New(repo repository.ServerStorage) *Handler {
 	return &Handler{repo}
 }
 

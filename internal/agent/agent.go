@@ -7,11 +7,11 @@ import (
 )
 
 type Agent struct {
-	repo   *repository.MemStorage
+	repo   repository.AgentStorage
 	uptime int
 }
 
-func New(repo *repository.MemStorage) *Agent {
+func New(repo repository.AgentStorage) *Agent {
 	return &Agent{repo: repo}
 }
 

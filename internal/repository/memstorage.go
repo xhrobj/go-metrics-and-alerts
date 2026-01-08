@@ -1,6 +1,8 @@
 package repository
 
-import "errors"
+import (
+	"errors"
+)
 
 type MemStorage struct {
 	gauges   map[string]float64

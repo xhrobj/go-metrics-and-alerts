@@ -20,14 +20,14 @@ func (a *Agent) report() {
 	for name, value := range gauges {
 		err := sendGauge(name, value)
 		if err != nil {
-			print(err)
+			logError(err)
 		}
 	}
 
 	for name, value := range counters {
 		err := sendCounter(name, value)
 		if err != nil {
-			print(err)
+			logError(err)
 		}
 	}
 }
@@ -67,6 +67,6 @@ func sendMetric(path string) error {
 	return nil
 }
 
-func print(err error) {
+func logError(err error) {
 	fmt.Println("  (×﹏×)", err)
 }
