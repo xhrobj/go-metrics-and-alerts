@@ -6,24 +6,33 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
+const pollIntervalInSec = 2
+const reportIntervalInSec = 10
+
 type Agent struct {
-	repo   repository.AgentStorage
-	uptime int
+	repo    repository.AgentStorage
+	baseURL string
+	uptime  int
 }
 
-func New(repo repository.AgentStorage) *Agent {
-	return &Agent{repo: repo}
+func New(repo repository.AgentStorage, baseURL string) *Agent {
+	return &Agent{repo: repo, baseURL: baseURL}
 }
 
 func (a *Agent) Run() {
 	for {
-		if a.uptime%2 == 0 {
-			a.poll()
-		}
-		if a.uptime%10 == 0 {
-			a.report()
-		}
+		a.tick()
 		time.Sleep(1 * time.Second)
-		a.uptime++
+
 	}
+}
+
+func (a *Agent) tick() {
+	if a.uptime%pollIntervalInSec == 0 {
+		a.poll()
+	}
+	if a.uptime != 0 && a.uptime%reportIntervalInSec == 0 {
+		a.report()
+	}
+	a.uptime++
 }

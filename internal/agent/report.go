@@ -8,8 +8,6 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
 
-const host = "http://localhost:8080"
-
 var client = &http.Client{}
 
 func (a *Agent) report() {
@@ -18,33 +16,33 @@ func (a *Agent) report() {
 	fmt.Printf("%d >>> report\n", a.uptime)
 
 	for name, value := range gauges {
-		err := sendGauge(name, value)
+		err := a.sendGauge(name, value)
 		if err != nil {
 			logError(err)
 		}
 	}
 
 	for name, value := range counters {
-		err := sendCounter(name, value)
+		err := a.sendCounter(name, value)
 		if err != nil {
 			logError(err)
 		}
 	}
 }
 
-func sendGauge(name string, value float64) error {
+func (a *Agent) sendGauge(name string, value float64) error {
 	path := model.Gauge + "/" + name + "/" + strconv.FormatFloat(value, 'f', -1, 64)
-	return sendMetric(path)
+	return a.sendMetric(path)
 
 }
 
-func sendCounter(name string, value int64) error {
+func (a *Agent) sendCounter(name string, value int64) error {
 	path := model.Counter + "/" + name + "/" + strconv.FormatInt(value, 10)
-	return sendMetric(path)
+	return a.sendMetric(path)
 }
 
-func sendMetric(path string) error {
-	url := host + "/update/" + path
+func (a *Agent) sendMetric(path string) error {
+	url := a.baseURL + "/update/" + path
 	fmt.Println(" *", url)
 
 	request, err := http.NewRequest(http.MethodPost, url, nil)

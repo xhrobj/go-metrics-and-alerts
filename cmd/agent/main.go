@@ -7,7 +7,7 @@ import (
 
 func main() {
 	repo := repository.NewMemStorage()
-	a := agent.New(repo)
+	a := agent.New(repo, "http://localhost:8080")
 
 	a.Run()
 }
