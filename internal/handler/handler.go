@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -67,13 +68,13 @@ func (h *Handler) UpdatePage(rw http.ResponseWriter, rq *http.Request) {
 	rw.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	rw.WriteHeader((http.StatusOK))
 
-	/* fmt.Fprintf(rw, "-> %s %s %s\n", metricType, metricName, metricValue)
+	fmt.Printf("-> %s %s %s\n", metricType, metricName, metricValue)
 	switch metricType {
 	case model.Gauge:
 		x, _ := h.repo.GetGauge(metricName)
-		fmt.Fprintf(rw, "<- %10.2f\n", x)
+		fmt.Printf("\t%s\n", strconv.FormatFloat(x, 'f', -1, 64))
 	case model.Counter:
 		x, _ := h.repo.GetCounter(metricName)
-		fmt.Fprintf(rw, "<- %d\n", x)
-	} */
+		fmt.Printf("\t%d\n", x)
+	}
 }
