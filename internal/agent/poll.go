@@ -5,8 +5,8 @@ import (
 	"runtime"
 )
 
-func poll() {
-	fmt.Printf("%d poll\n", uptime)
+func (a *Agent) poll() {
+	fmt.Printf("%d poll\n", a.uptime)
 
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)

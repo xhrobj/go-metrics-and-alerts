@@ -3,23 +3,32 @@ package agent
 import (
 	"fmt"
 	"time"
+
+	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
-var uptime uint = 0
+type Agent struct {
+	repo   *repository.MemStorage
+	uptime uint
+}
 
-func Run() {
+func New(repo *repository.MemStorage) *Agent {
+	return &Agent{repo: repo}
+}
+
+func (a *Agent) Run() {
 	for {
-		if uptime%2 == 0 {
-			poll()
+		if a.uptime%2 == 0 {
+			a.poll()
 		}
-		if uptime%10 == 0 {
-			report()
+		if a.uptime%10 == 0 {
+			a.report()
 		}
 		time.Sleep(1 * time.Second)
-		uptime++
+		a.uptime++
 	}
 }
 
-func report() {
-	fmt.Printf("%d report\n", uptime)
+func (a *Agent) report() {
+	fmt.Printf("%d >>> report\n\n", a.uptime)
 }
