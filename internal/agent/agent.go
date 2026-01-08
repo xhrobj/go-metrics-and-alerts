@@ -9,7 +9,7 @@ import (
 
 type Agent struct {
 	repo   *repository.MemStorage
-	uptime uint
+	uptime int
 }
 
 func New(repo *repository.MemStorage) *Agent {
