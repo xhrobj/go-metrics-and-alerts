@@ -20,10 +20,6 @@ func Run() {
 	}
 }
 
-func poll() {
-	fmt.Printf("%d poll\n", uptime)
-}
-
 func report() {
 	fmt.Printf("%d report\n", uptime)
 }
