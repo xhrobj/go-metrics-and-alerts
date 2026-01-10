@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
@@ -32,16 +33,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// expect: /update/{type}/{name}/{value}
-	path := strings.TrimPrefix(r.URL.Path, "/")
-	parts := strings.Split(path, "/")
-	if len(parts) != 4 {
-		// malformed path -> 404
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	metricType, metricName, metricValue := parts[1], parts[2], parts[3]
+	metricType := chi.URLParam(r, "type")
+	metricName := chi.URLParam(r, "name")
+	metricValue := chi.URLParam(r, "value")
 
 	// missing name -> 404
 	if metricName == "" {
@@ -72,7 +66,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// success
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader((http.StatusOK))
+	w.WriteHeader(http.StatusOK)
 
 	fmt.Printf("-> %s %s %s\n", metricType, metricName, metricValue)
 	switch metricType {

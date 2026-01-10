@@ -9,7 +9,7 @@ import (
 
 func New(h *handler.Handler) http.Handler {
 	r := chi.NewRouter()
-	r.HandleFunc("/update/*", h.Update)
+	r.HandleFunc("/update/{type}/{name}/{value}", h.Update)
 
 	return r
 }

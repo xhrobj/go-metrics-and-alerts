@@ -5,19 +5,27 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 )
+
+func testRouter(h *handler.Handler) http.Handler {
+	r := chi.NewRouter()
+	r.Post("/update/{type}/{name}/{value}", h.Update)
+	return r
+}
 
 // 200 OK для валидного POST /update/gauge/<name>/<value>
 func TestHandler_Update_Gauge_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	h := handler.New(repo)
+	r := testRouter(h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/gauge/Alloc/5.42", nil)
 	rq.Header.Set("Content-Type", "text/plain")
 	rr := httptest.NewRecorder()
 
-	h.Update(rr, rq)
+	r.ServeHTTP(rr, rq)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
@@ -38,12 +46,13 @@ func TestHandler_Update_Gauge_OK(t *testing.T) {
 func TestHandler_Update_Counter_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	h := handler.New(repo)
+	r := testRouter(h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
 	rq.Header.Set("Content-Type", "text/plain")
 	rr := httptest.NewRecorder()
 
-	h.Update(rr, rq)
+	r.ServeHTTP(rr, rq)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
@@ -64,15 +73,16 @@ func TestHandler_Update_Counter_OK(t *testing.T) {
 func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	h := handler.New(repo)
+	r := testRouter(h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
 	rq.Header.Set("Content-Type", "text/plain")
 
 	rr1 := httptest.NewRecorder()
-	h.Update(rr1, rq)
+	r.ServeHTTP(rr1, rq)
 
 	rr2 := httptest.NewRecorder()
-	h.Update(rr2, rq)
+	r.ServeHTTP(rr2, rq)
 
 	if rr2.Code != http.StatusOK {
 		t.Fatalf("expected %d, got %d", http.StatusOK, rr2.Code)
@@ -86,6 +96,7 @@ func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 
 func TestHandler_Update_StatusCodes(t *testing.T) {
 	h := handler.New(newMockServerStorage())
+	r := testRouter(h)
 
 	tests := []struct {
 		name        string
@@ -107,12 +118,15 @@ func TestHandler_Update_StatusCodes(t *testing.T) {
 		{"bad gauge value", http.MethodPost, "/update/gauge/Alloc/abc", "text/plain", http.StatusBadRequest},
 		{"bad counter value", http.MethodPost, "/update/counter/PollCount/1.2", "text/plain", http.StatusBadRequest},
 
-		// 404 Not Found -> если путь “не той формы” (мало/много сегментов):
+		// 404 Not Found -> если путь “не той формы” (мало/много сегментов, пустые сегменты):
 
 		{"malformed path short", http.MethodPost, "/update/gauge/Alloc", "text/plain", http.StatusNotFound},
 		{"malformed path long", http.MethodPost, "/update/gauge/Alloc/1/extra", "text/plain", http.StatusNotFound},
 
-		// 404 Not Found -> если пустое имя метрики (кейс из требований, но через роутер такое пройти не должно):
+		{"empty value", http.MethodPost, "/update/gauge/Alloc/", "text/plain", http.StatusNotFound},
+		{"empty all", http.MethodPost, "/update////", "text/plain", http.StatusNotFound},
+
+		// 404 Not Found -> если пустое имя метрики (кейс из требований):
 
 		{"empty name", http.MethodPost, "/update/gauge//1", "text/plain", http.StatusNotFound},
 
@@ -123,13 +137,13 @@ func TestHandler_Update_StatusCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
+			rq := httptest.NewRequest(tt.method, tt.path, nil)
 			if tt.contentType != "" {
-				req.Header.Set("Content-Type", tt.contentType)
+				rq.Header.Set("Content-Type", tt.contentType)
 			}
 
 			rr := httptest.NewRecorder()
-			h.Update(rr, req)
+			r.ServeHTTP(rr, rq)
 
 			if rr.Code != tt.wantStatus {
 				t.Errorf("expected %d, got %d", tt.wantStatus, rr.Code)
