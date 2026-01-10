@@ -8,8 +8,6 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
 
-var client = &http.Client{}
-
 func (a *Agent) report() {
 	gauges, counters := a.repo.Snapshot()
 
@@ -51,7 +49,7 @@ func (a *Agent) sendMetric(path string) error {
 	}
 	request.Header.Set("Content-Type", "text/plain")
 
-	response, err := client.Do(request)
+	response, err := a.client.Do(request)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
@@ -12,11 +13,16 @@ const reportIntervalInSec = 10
 type Agent struct {
 	repo    repository.AgentStorage
 	baseURL string
+	client  *http.Client
 	uptime  int
 }
 
 func New(repo repository.AgentStorage, baseURL string) *Agent {
-	return &Agent{repo: repo, baseURL: baseURL}
+	return &Agent{
+		repo:    repo,
+		baseURL: baseURL,
+		client:  &http.Client{},
+	}
 }
 
 func (a *Agent) Run() {
