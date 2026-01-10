@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
@@ -9,6 +10,8 @@ import (
 )
 
 func main() {
+	parseFlags()
+
 	if err := run(); err != nil {
 		panic(err)
 	}
@@ -19,5 +22,7 @@ func run() error {
 	h := handler.New(repo)
 	r := router.New(h)
 
-	return http.ListenAndServe(`localhost:8080`, r)
+	fmt.Println("*** Running server on", flagRunAddr) // FIXME:
+
+	return http.ListenAndServe(flagRunAddr, r)
 }
