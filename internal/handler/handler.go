@@ -78,3 +78,39 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("\t%d\n", x)
 	}
 }
+
+func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
+	metricType := chi.URLParam(r, "type")
+	metricName := chi.URLParam(r, "name")
+
+	fmt.Println(metricName, metricType)
+
+	// invalid type or missing name -> 404
+	if !(metricType == model.Gauge || metricType == model.Counter) || metricName == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	var value = ""
+	switch metricType {
+	case model.Gauge:
+		x, err := h.repo.GetGauge(metricName)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		value = strconv.FormatFloat(x, 'f', -1, 64)
+	case model.Counter:
+		x, err := h.repo.GetCounter(metricName)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		value = strconv.FormatInt(x, 10)
+	}
+
+	// success
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(value))
+}

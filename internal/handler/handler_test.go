@@ -12,6 +12,8 @@ import (
 func testRouter(h *handler.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", h.Update)
+	r.Get("/value/{type}/{name}", h.Value)
+
 	return r
 }
 
@@ -147,6 +149,78 @@ func TestHandler_Update_StatusCodes(t *testing.T) {
 
 			if rr.Code != tt.wantStatus {
 				t.Errorf("expected %d, got %d", tt.wantStatus, rr.Code)
+			}
+		})
+	}
+}
+
+func TestHandler_Value(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		seed       func(repo *mockServerStorage)
+		wantStatus int
+		wantBody   string
+		wantCT     string
+	}{
+		{
+			name: "gauge ok",
+			path: "/value/gauge/Alloc",
+			seed: func(repo *mockServerStorage) {
+				repo.gauges["Alloc"] = 5.42
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   "5.42",
+			wantCT:     "text/plain; charset=utf-8",
+		},
+		{
+			name: "counter ok",
+			path: "/value/counter/PollCount",
+			seed: func(repo *mockServerStorage) {
+				repo.counters["PollCount"] = 42
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   "42",
+			wantCT:     "text/plain; charset=utf-8",
+		},
+		{
+			name:       "unknown type -> 404",
+			path:       "/value/unknown/Alloc",
+			seed:       func(repo *mockServerStorage) {},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "metric not found -> 404",
+			path:       "/value/gauge/NoSuchMetric",
+			seed:       func(repo *mockServerStorage) {},
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newMockServerStorage()
+			tt.seed(repo)
+
+			h := handler.New(repo)
+			r := testRouter(h)
+
+			rq := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rr := httptest.NewRecorder()
+
+			r.ServeHTTP(rr, rq)
+
+			if rr.Code != tt.wantStatus {
+				t.Fatalf("expected %d, got %d", tt.wantStatus, rr.Code)
+			}
+
+			if tt.wantStatus == http.StatusOK {
+				if body := rr.Body.String(); body != tt.wantBody {
+					t.Fatalf("expected body %q, got %q", tt.wantBody, body)
+				}
+				if ct := rr.Header().Get("Content-Type"); ct != tt.wantCT {
+					t.Fatalf("expected Content-Type %q, got %q", tt.wantCT, ct)
+				}
 			}
 		})
 	}
