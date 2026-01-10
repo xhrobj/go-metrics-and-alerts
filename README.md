@@ -184,6 +184,6 @@ Content-Type: text/plain; charset=utf-8
 - #7. Рефакторинг mux -> chi для Сервера
 - #8. Рефакторинг net/http -> resty для Агента
 - #9. Добавить API-метод: /value/{type}/{name}
-- #10. Добавить API-метод: /
+- #10. Добавить API-метод: / (HTML)
 
 ---

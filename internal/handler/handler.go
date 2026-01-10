@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ func New(repo repository.ServerStorage) *Handler {
 	return &Handler{repo: repo}
 }
 
+// принимает метрику на хранение
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	// method must be POST
 	if r.Method != http.MethodPost {
@@ -68,6 +70,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 
+	// TODO: убрать
+
 	fmt.Printf("-> %s %s %s\n", metricType, metricName, metricValue)
 	switch metricType {
 	case model.Gauge:
@@ -79,11 +83,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// возвращает аккумулированное значение метрики в текстовом виде
 func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
-
-	fmt.Println(metricName, metricType)
 
 	// invalid type or missing name -> 404
 	if !(metricType == model.Gauge || metricType == model.Counter) || metricName == "" {
@@ -91,7 +94,7 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var value = ""
+	out := ""
 	switch metricType {
 	case model.Gauge:
 		x, err := h.repo.GetGauge(metricName)
@@ -99,18 +102,43 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		value = strconv.FormatFloat(x, 'f', -1, 64)
+		out = strconv.FormatFloat(x, 'f', -1, 64)
 	case model.Counter:
 		x, err := h.repo.GetCounter(metricName)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		value = strconv.FormatInt(x, 10)
+		out = strconv.FormatInt(x, 10)
 	}
 
 	// success
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(value))
+	w.Write([]byte(out))
+}
+
+// отдает страницу со списком имён и значений всех известных на текущий момент метрик
+func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
+	gauges, counters := h.repo.Snapshot()
+
+	var out strings.Builder
+	out.WriteString("<!doctype html><html><head><meta charset=\"utf-8\">")
+	out.WriteString("<title>storage values</title></head><body><ul>")
+	for n, v := range gauges {
+		safeName := html.EscapeString(n)
+		value := strconv.FormatFloat(v, 'f', -1, 64)
+		fmt.Fprintf(&out, "<li>%s: <strong>%s</strong></li>", safeName, value)
+	}
+
+	for n, v := range counters {
+		safeName := html.EscapeString(n)
+		fmt.Fprintf(&out, "<li>%s: <strong>%d</strong></li>", safeName, v)
+	}
+	out.WriteString("</ul></body></html>")
+
+	// success
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(out.String()))
 }

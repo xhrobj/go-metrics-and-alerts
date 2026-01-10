@@ -3,6 +3,7 @@ package handler_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +14,7 @@ func testRouter(h *handler.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", h.Update)
 	r.Get("/value/{type}/{name}", h.Value)
+	r.Get("/", h.Index)
 
 	return r
 }
@@ -223,5 +225,38 @@ func TestHandler_Value(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHandler_Index_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	repo.gauges["Alloc"] = 5.42
+	repo.counters["PollCount"] = 42
+
+	h := handler.New(repo)
+	r := testRouter(h)
+
+	rq := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	ct := rr.Header().Get("Content-Type")
+	if ct != "text/html; charset=utf-8" {
+		t.Fatalf("expected Content-Type %q, got %q", "text/html; charset=utf-8", ct)
+	}
+
+	body := rr.Body.String()
+
+	if !(strings.Contains(body, "Alloc") && strings.Contains(body, "5.42")) {
+		t.Errorf("response body does not contain gauge metric: %s", body)
+	}
+
+	if !(strings.Contains(body, "PollCount") && strings.Contains(body, "42")) {
+		t.Errorf("response body does not contain counter metric: %s", body)
 	}
 }

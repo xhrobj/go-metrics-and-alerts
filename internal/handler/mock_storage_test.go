@@ -1,5 +1,9 @@
 package handler_test
 
+import "errors"
+
+var errNoData = errors.New("no data")
+
 // mockStorage — минимальная реализация repository.ServerStorage для тестов хэндлера
 type mockServerStorage struct {
 	gauges   map[string]float64
@@ -21,6 +25,10 @@ func (m *mockServerStorage) UpdateCounter(name string, delta int64) {
 	m.counters[name] += delta
 }
 
+func (m *mockServerStorage) Snapshot() (map[string]float64, map[string]int64) {
+	return m.gauges, m.counters
+}
+
 func (m *mockServerStorage) GetGauge(name string) (float64, error) {
 	v, ok := m.gauges[name]
 	if !ok {
@@ -36,9 +44,3 @@ func (m *mockServerStorage) GetCounter(name string) (int64, error) {
 	}
 	return v, nil
 }
-
-var errNoData = &noDataError{}
-
-type noDataError struct{}
-
-func (e *noDataError) Error() string { return "no data" }
