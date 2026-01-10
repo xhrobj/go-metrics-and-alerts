@@ -5,6 +5,7 @@ import (
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/router"
 )
 
 func main() {
@@ -16,14 +17,7 @@ func main() {
 func run() error {
 	repo := repository.NewMemStorage()
 	h := handler.New(repo)
-	mux := newServerRouter(h)
+	mux := router.New(h)
 
 	return http.ListenAndServe(`localhost:8080`, mux)
-}
-
-func newServerRouter(h *handler.Handler) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/update/", h.Update)
-
-	return mux
 }
