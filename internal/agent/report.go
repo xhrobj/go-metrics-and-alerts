@@ -43,21 +43,16 @@ func (a *Agent) sendMetric(path string) error {
 	url := a.baseURL + "/update/" + path
 	fmt.Println(" *", url)
 
-	request, err := http.NewRequest(http.MethodPost, url, nil)
+	resp, err := a.client.R().
+		SetHeader("Content-Type", "text/plain").
+		Post(url)
+
 	if err != nil {
 		return err
 	}
-	request.Header.Set("Content-Type", "text/plain")
 
-	response, err := a.client.Do(request)
-	if err != nil {
-		return err
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status: %s", response.Status)
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("unexpected status: %s", resp.Status())
 	}
 
 	return nil

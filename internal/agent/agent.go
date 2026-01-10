@@ -1,9 +1,9 @@
 package agent
 
 import (
-	"net/http"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
@@ -13,7 +13,7 @@ const reportIntervalInSec = 10
 type Agent struct {
 	repo    repository.AgentStorage
 	baseURL string
-	client  *http.Client
+	client  *resty.Client
 	uptime  int
 }
 
@@ -21,7 +21,7 @@ func New(repo repository.AgentStorage, baseURL string) *Agent {
 	return &Agent{
 		repo:    repo,
 		baseURL: baseURL,
-		client:  &http.Client{},
+		client:  resty.New(),
 	}
 }
 
