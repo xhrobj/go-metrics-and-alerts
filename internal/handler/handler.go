@@ -70,17 +70,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 
-	// TODO: убрать
-
 	fmt.Printf("-> %s %s %s\n", metricType, metricName, metricValue)
-	switch metricType {
-	case model.Gauge:
-		x, _ := h.repo.GetGauge(metricName)
-		fmt.Printf("\t%s\n", strconv.FormatFloat(x, 'f', -1, 64))
-	case model.Counter:
-		x, _ := h.repo.GetCounter(metricName)
-		fmt.Printf("\t%d\n", x)
-	}
 }
 
 // возвращает аккумулированное значение метрики в текстовом виде

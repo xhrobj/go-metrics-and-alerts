@@ -6,8 +6,10 @@ import (
 )
 
 func main() {
+	parseFlags()
+
 	repo := repository.NewMemStorage()
-	a := agent.New(repo, "http://localhost:8080")
+	a := agent.New(repo, "http://"+flagServerAddr)
 
 	a.Run()
 }

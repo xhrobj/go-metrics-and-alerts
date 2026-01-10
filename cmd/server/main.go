@@ -22,7 +22,7 @@ func run() error {
 	h := handler.New(repo)
 	r := router.New(h)
 
-	fmt.Println("*** Running server on", flagRunAddr) // FIXME:
+	fmt.Println("*** Running server on", flagRunAddr)
 
 	return http.ListenAndServe(flagRunAddr, r)
 }
