@@ -17,7 +17,7 @@ func main() {
 func run() error {
 	repo := repository.NewMemStorage()
 	h := handler.New(repo)
-	mux := router.New(h)
+	r := router.New(h)
 
-	return http.ListenAndServe(`localhost:8080`, mux)
+	return http.ListenAndServe(`localhost:8080`, r)
 }
