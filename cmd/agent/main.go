@@ -9,7 +9,11 @@ func main() {
 	parseFlags()
 
 	repo := repository.NewMemStorage()
-	a := agent.New(repo, "http://"+flagServerAddr)
+	a := agent.New(
+		repo,
+		"http://"+flagServerAddr,
+		flagPollIntervalInSec,
+		flagReportIntervalInSec)
 
 	a.Run()
 }

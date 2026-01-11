@@ -9,7 +9,7 @@ import (
 // poll() увеличивает PollCount и выставляет RandomValue
 func TestAgent_Poll_UpdatesMetrics(t *testing.T) {
 	repo := repository.NewMemStorage()
-	a := New(repo, "http://example.com:8080")
+	a := New(repo, "http://example.com:8080", 2, 10)
 
 	a.poll()
 

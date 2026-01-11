@@ -31,7 +31,6 @@ func (a *Agent) report() {
 func (a *Agent) sendGauge(name string, value float64) error {
 	path := model.Gauge + "/" + name + "/" + strconv.FormatFloat(value, 'f', -1, 64)
 	return a.sendMetric(path)
-
 }
 
 func (a *Agent) sendCounter(name string, value int64) error {
@@ -59,5 +58,5 @@ func (a *Agent) sendMetric(path string) error {
 }
 
 func logError(err error) {
-	fmt.Println("  (×﹏×)", err)
+	fmt.Println("\t(×﹏×)", err)
 }
