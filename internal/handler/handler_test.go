@@ -10,7 +10,9 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 )
 
-func testRouter(h *handler.Handler) http.Handler {
+func testRouter(t *testing.T, h *handler.Handler) http.Handler {
+	t.Helper()
+
 	r := chi.NewRouter()
 	r.Post("/update/{type}/{name}/{value}", h.Update)
 	r.Get("/value/{type}/{name}", h.Value)
@@ -23,7 +25,7 @@ func testRouter(h *handler.Handler) http.Handler {
 func TestHandler_Update_Gauge_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	h := handler.New(repo)
-	r := testRouter(h)
+	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/gauge/Alloc/5.42", nil)
 	rq.Header.Set("Content-Type", "text/plain")
@@ -50,7 +52,7 @@ func TestHandler_Update_Gauge_OK(t *testing.T) {
 func TestHandler_Update_Counter_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	h := handler.New(repo)
-	r := testRouter(h)
+	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
 	rq.Header.Set("Content-Type", "text/plain")
@@ -77,7 +79,7 @@ func TestHandler_Update_Counter_OK(t *testing.T) {
 func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	h := handler.New(repo)
-	r := testRouter(h)
+	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
 	rq.Header.Set("Content-Type", "text/plain")
@@ -100,7 +102,7 @@ func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 
 func TestHandler_Update_StatusCodes(t *testing.T) {
 	h := handler.New(newMockServerStorage())
-	r := testRouter(h)
+	r := testRouter(t, h)
 
 	tests := []struct {
 		name        string
@@ -205,7 +207,7 @@ func TestHandler_Value(t *testing.T) {
 			tt.seed(repo)
 
 			h := handler.New(repo)
-			r := testRouter(h)
+			r := testRouter(t, h)
 
 			rq := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			rr := httptest.NewRecorder()
@@ -234,7 +236,7 @@ func TestHandler_Index_OK(t *testing.T) {
 	repo.counters["PollCount"] = 42
 
 	h := handler.New(repo)
-	r := testRouter(h)
+	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
