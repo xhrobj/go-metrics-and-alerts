@@ -24,6 +24,10 @@ func (m *MemStorage) UpdateCounter(name string, delta int64) {
 	m.counters[name] += delta
 }
 
+func (m *MemStorage) ResetCounter(name string) {
+	m.counters[name] = 0
+}
+
 func (m *MemStorage) GetGauge(name string) (float64, error) {
 	value, saved := m.gauges[name]
 	if !saved {

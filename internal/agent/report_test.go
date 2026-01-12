@@ -52,14 +52,13 @@ func TestAgent_Report_UsesCorrectPaths(t *testing.T) {
 
 	repo := repository.NewMemStorage()
 	repo.UpdateGauge("Alloc", 5.42)
-	repo.UpdateCounter("PollCount", 1)
 
 	a, _ := New(repo, server.URL, 2, 10)
 	a.report()
 
 	expected := []string{
 		"/update/gauge/Alloc/5.42",
-		"/update/counter/PollCount/1",
+		"/update/counter/PollCount/0",
 	}
 
 	for _, path := range expected {

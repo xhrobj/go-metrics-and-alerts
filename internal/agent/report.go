@@ -10,7 +10,7 @@ import (
 )
 
 func (a *Agent) report() {
-	gauges, counters := a.repo.Snapshot()
+	gauges, _ := a.repo.Snapshot()
 
 	log.Printf("%d >>> report\n", a.uptime)
 
@@ -21,12 +21,13 @@ func (a *Agent) report() {
 		}
 	}
 
-	for name, value := range counters {
-		err := a.sendCounter(name, value)
-		if err != nil {
-			logError(err)
-		}
+	err := a.sendCounter("PollCount", int64(a.pollSinceReport))
+	if err != nil {
+		logError(err)
+		return
 	}
+
+	a.pollSinceReport = 0
 }
 
 func (a *Agent) sendGauge(name string, value float64) error {

@@ -21,6 +21,7 @@ type Agent struct {
 	reportIntervalInSec int
 	client              *resty.Client
 	uptime              int
+	pollSinceReport     int
 }
 
 func New(

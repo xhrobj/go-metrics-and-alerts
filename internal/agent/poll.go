@@ -7,7 +7,7 @@ import (
 )
 
 func (a *Agent) poll() {
-	log.Printf("%d poll\n", a.uptime)
+	log.Printf("%d poll (%d)", a.uptime, a.pollSinceReport)
 
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
@@ -41,5 +41,6 @@ func (a *Agent) poll() {
 	a.repo.UpdateGauge("TotalAlloc", float64(ms.TotalAlloc))
 
 	a.repo.UpdateGauge("RandomValue", rand.Float64())
-	a.repo.UpdateCounter("PollCount", 1)
+
+	a.pollSinceReport++
 }
