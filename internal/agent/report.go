@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -11,7 +12,7 @@ import (
 func (a *Agent) report() {
 	gauges, counters := a.repo.Snapshot()
 
-	fmt.Printf("%d >>> report\n", a.uptime)
+	log.Printf("%d >>> report\n", a.uptime)
 
 	for name, value := range gauges {
 		err := a.sendGauge(name, value)
@@ -40,7 +41,7 @@ func (a *Agent) sendCounter(name string, value int64) error {
 
 func (a *Agent) sendMetric(path string) error {
 	url := a.baseURL + "/update/" + path
-	fmt.Println(" *", url)
+	log.Printf("* %s", url)
 
 	resp, err := a.client.R().
 		SetHeader("Content-Type", "text/plain").
@@ -58,5 +59,8 @@ func (a *Agent) sendMetric(path string) error {
 }
 
 func logError(err error) {
-	fmt.Println("\t(×﹏×)", err)
+	if err == nil {
+		return
+	}
+	log.Printf("(×﹏×) %v", err)
 }
