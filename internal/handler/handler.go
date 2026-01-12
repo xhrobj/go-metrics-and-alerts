@@ -9,14 +9,21 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
-type Handler struct {
-	repo repository.ServerStorage
+type ServerStorage interface {
+	UpdateGauge(string, float64)
+	UpdateCounter(string, int64)
+	Snapshot() (map[string]float64, map[string]int64)
+	GetGauge(string) (float64, error)
+	GetCounter(string) (int64, error)
 }
 
-func New(repo repository.ServerStorage) *Handler {
+type Handler struct {
+	repo ServerStorage
+}
+
+func New(repo ServerStorage) *Handler {
 	return &Handler{repo: repo}
 }
 

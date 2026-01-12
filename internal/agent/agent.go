@@ -6,11 +6,16 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
+type AgentStorage interface {
+	UpdateGauge(string, float64)
+	UpdateCounter(string, int64)
+	Snapshot() (map[string]float64, map[string]int64)
+}
+
 type Agent struct {
-	repo                repository.AgentStorage
+	repo                AgentStorage
 	baseURL             string
 	pollIntervalInSec   int
 	reportIntervalInSec int
@@ -19,7 +24,7 @@ type Agent struct {
 }
 
 func New(
-	repo repository.AgentStorage,
+	repo AgentStorage,
 	baseURL string,
 	pollIntervalInSec int,
 	reportIntervalInSec int,
