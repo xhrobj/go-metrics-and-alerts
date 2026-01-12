@@ -17,13 +17,13 @@ func main() {
 }
 
 func run() error {
-	cfg := config.GetConfig()
+	cfg := config.GetServerConfig()
 
 	repo := repository.NewMemStorage()
 	h := handler.New(repo)
 	r := router.New(h)
 
-	log.Printf("running server on %s ...", cfg.ServerConfig.ServerAddr)
+	log.Printf("running server on %s ...", cfg.ServerAddr)
 
-	return http.ListenAndServe(cfg.ServerConfig.ServerAddr, r)
+	return http.ListenAndServe(cfg.ServerAddr, r)
 }

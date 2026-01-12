@@ -32,7 +32,7 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	repo.UpdateGauge("Alloc", 5.42)
 	repo.UpdateCounter("PollCount", 1)
 
-	a := New(repo, server.URL, 2, 10)
+	a, _ := New(repo, server.URL, 2, 10)
 	a.report()
 
 	if requests != 2 {
@@ -54,7 +54,7 @@ func TestAgent_Report_UsesCorrectPaths(t *testing.T) {
 	repo.UpdateGauge("Alloc", 5.42)
 	repo.UpdateCounter("PollCount", 1)
 
-	a := New(repo, server.URL, 2, 10)
+	a, _ := New(repo, server.URL, 2, 10)
 	a.report()
 
 	expected := []string{

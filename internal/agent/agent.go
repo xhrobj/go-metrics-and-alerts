@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -20,21 +22,32 @@ func New(
 	repo repository.AgentStorage,
 	baseURL string,
 	pollIntervalInSec int,
-	reportIntervalInSec int) *Agent {
+	reportIntervalInSec int,
+) (*Agent, error) {
+	if pollIntervalInSec <= 0 {
+		return nil, fmt.Errorf("poll interval must be > 0, got %d", pollIntervalInSec)
+	}
+	if reportIntervalInSec <= 0 {
+		return nil, fmt.Errorf("report interval must be > 0, got %d", reportIntervalInSec)
+	}
+
+	if !strings.Contains(baseURL, "://") {
+		baseURL = "http://" + baseURL
+	}
+
 	return &Agent{
 		repo:                repo,
 		baseURL:             baseURL,
 		pollIntervalInSec:   pollIntervalInSec,
 		reportIntervalInSec: reportIntervalInSec,
 		client:              resty.New(),
-	}
+	}, nil
 }
 
 func (a *Agent) Run() {
 	for {
 		a.tick()
 		time.Sleep(1 * time.Second)
-
 	}
 }
 

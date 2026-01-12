@@ -1,13 +1,13 @@
 package agent
 
 import (
-	"fmt"
+	"log"
 	"math/rand"
 	"runtime"
 )
 
 func (a *Agent) poll() {
-	fmt.Printf("%d poll\n", a.uptime)
+	log.Printf("%d poll\n", a.uptime)
 
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
