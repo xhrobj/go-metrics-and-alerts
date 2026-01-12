@@ -48,7 +48,7 @@ func (a *Agent) sendMetric(path string) error {
 		Post(url)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to send metric: %w", err)
 	}
 
 	if resp.StatusCode() != http.StatusOK {
