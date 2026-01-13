@@ -1,0 +1,264 @@
+package handler_test
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
+)
+
+func testRouter(t *testing.T, h *handler.Handler) http.Handler {
+	t.Helper()
+
+	r := chi.NewRouter()
+	r.Post("/update/{type}/{name}/{value}", h.Update)
+	r.Get("/value/{type}/{name}", h.Value)
+	r.Get("/", h.Index)
+
+	return r
+}
+
+// 200 OK для валидного POST /update/gauge/<name>/<value>
+func TestHandler_Update_Gauge_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	h := handler.New(repo)
+	r := testRouter(t, h)
+
+	rq := httptest.NewRequest(http.MethodPost, "/update/gauge/Alloc/5.42", nil)
+	rq.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	expected := 5.42
+	if got := repo.gauges["Alloc"]; got != expected {
+		t.Fatalf("expected %v, got %v", expected, got)
+	}
+
+	ct := rr.Header().Get("Content-Type")
+	if ct != "text/plain; charset=utf-8" {
+		t.Errorf("expected Content-Type %q, got %q", "text/plain; charset=utf-8", ct)
+	}
+}
+
+// 200 OK для валидного POST /update/counter/<name>/<value>
+func TestHandler_Update_Counter_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	h := handler.New(repo)
+	r := testRouter(t, h)
+
+	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
+	rq.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	expected := int64(42)
+	if got := repo.counters["PollCount"]; got != expected {
+		t.Fatalf("expected %v, got %v", expected, got)
+	}
+
+	ct := rr.Header().Get("Content-Type")
+	if ct != "text/plain; charset=utf-8" {
+		t.Errorf("expected Content-Type %q, got %q", "text/plain; charset=utf-8", ct)
+	}
+}
+
+// два POST на одну counter-метрику -> счётчик суммируется
+func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	h := handler.New(repo)
+	r := testRouter(t, h)
+
+	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
+	rq.Header.Set("Content-Type", "text/plain")
+
+	rr1 := httptest.NewRecorder()
+	r.ServeHTTP(rr1, rq)
+
+	rr2 := httptest.NewRecorder()
+	r.ServeHTTP(rr2, rq)
+
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr2.Code)
+	}
+
+	expected := int64(84)
+	if got := repo.counters["PollCount"]; got != expected {
+		t.Fatalf("expected %v, got %v", expected, got)
+	}
+}
+
+func TestHandler_Update_StatusCodes(t *testing.T) {
+	h := handler.New(newMockServerStorage())
+	r := testRouter(t, h)
+
+	tests := []struct {
+		name        string
+		method      string
+		path        string
+		contentType string
+		wantStatus  int
+	}{
+		// 400 Bad Request -> если Content-Type не text/plain:
+
+		{"bad content type", http.MethodPost, "/update/gauge/Alloc/1", "application/json", http.StatusBadRequest},
+
+		// 400 Bad Request -> если тип метрики неизвестен:
+
+		{"unknown type", http.MethodPost, "/update/unknown/Alloc/1", "text/plain", http.StatusBadRequest},
+
+		// 400 Bad Request -> если значение не парсится (float/int):
+
+		{"bad gauge value", http.MethodPost, "/update/gauge/Alloc/abc", "text/plain", http.StatusBadRequest},
+		{"bad counter value", http.MethodPost, "/update/counter/PollCount/1.2", "text/plain", http.StatusBadRequest},
+
+		// 404 Not Found -> если путь “не той формы” (мало/много сегментов, пустые сегменты):
+
+		{"malformed path short", http.MethodPost, "/update/gauge/Alloc", "text/plain", http.StatusNotFound},
+		{"malformed path long", http.MethodPost, "/update/gauge/Alloc/1/extra", "text/plain", http.StatusNotFound},
+
+		{"empty value", http.MethodPost, "/update/gauge/Alloc/", "text/plain", http.StatusNotFound},
+		{"empty all", http.MethodPost, "/update////", "text/plain", http.StatusNotFound},
+
+		// 404 Not Found -> если пустое имя метрики (кейс из требований):
+
+		{"empty name", http.MethodPost, "/update/gauge//1", "text/plain", http.StatusNotFound},
+
+		// 405 Method Not Allowed -> если метод не POST:
+
+		{"method not allowed", http.MethodGet, "/update/gauge/Alloc/1", "text/plain", http.StatusMethodNotAllowed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rq := httptest.NewRequest(tt.method, tt.path, nil)
+			if tt.contentType != "" {
+				rq.Header.Set("Content-Type", tt.contentType)
+			}
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, rq)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("expected %d, got %d", tt.wantStatus, rr.Code)
+			}
+		})
+	}
+}
+
+func TestHandler_Value(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		seed       func(repo *mockServerStorage)
+		wantStatus int
+		wantBody   string
+		wantCT     string
+	}{
+		{
+			name: "gauge ok",
+			path: "/value/gauge/Alloc",
+			seed: func(repo *mockServerStorage) {
+				repo.gauges["Alloc"] = 5.42
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   "5.42",
+			wantCT:     "text/plain; charset=utf-8",
+		},
+		{
+			name: "counter ok",
+			path: "/value/counter/PollCount",
+			seed: func(repo *mockServerStorage) {
+				repo.counters["PollCount"] = 42
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   "42",
+			wantCT:     "text/plain; charset=utf-8",
+		},
+		{
+			name:       "unknown type -> 404",
+			path:       "/value/unknown/Alloc",
+			seed:       func(repo *mockServerStorage) {},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "metric not found -> 404",
+			path:       "/value/gauge/NoSuchMetric",
+			seed:       func(repo *mockServerStorage) {},
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newMockServerStorage()
+			tt.seed(repo)
+
+			h := handler.New(repo)
+			r := testRouter(t, h)
+
+			rq := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rr := httptest.NewRecorder()
+
+			r.ServeHTTP(rr, rq)
+
+			if rr.Code != tt.wantStatus {
+				t.Fatalf("expected %d, got %d", tt.wantStatus, rr.Code)
+			}
+
+			if tt.wantStatus == http.StatusOK {
+				if body := rr.Body.String(); body != tt.wantBody {
+					t.Fatalf("expected body %q, got %q", tt.wantBody, body)
+				}
+				if ct := rr.Header().Get("Content-Type"); ct != tt.wantCT {
+					t.Fatalf("expected Content-Type %q, got %q", tt.wantCT, ct)
+				}
+			}
+		})
+	}
+}
+
+func TestHandler_Index_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	repo.gauges["Alloc"] = 5.42
+	repo.counters["PollCount"] = 42
+
+	h := handler.New(repo)
+	r := testRouter(t, h)
+
+	rq := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	ct := rr.Header().Get("Content-Type")
+	if ct != "text/html; charset=utf-8" {
+		t.Fatalf("expected Content-Type %q, got %q", "text/html; charset=utf-8", ct)
+	}
+
+	body := rr.Body.String()
+
+	if !(strings.Contains(body, "Alloc") && strings.Contains(body, "5.42")) {
+		t.Errorf("response body does not contain gauge metric: %s", body)
+	}
+
+	if !(strings.Contains(body, "PollCount") && strings.Contains(body, "42")) {
+		t.Errorf("response body does not contain counter metric: %s", body)
+	}
+}
