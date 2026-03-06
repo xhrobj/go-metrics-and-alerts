@@ -15,7 +15,10 @@ func main() {
 }
 
 func run() error {
-	cfg := config.GetAgentConfig()
+	cfg, err := config.GetAgentConfig()
+	if err != nil {
+		return err
+	}
 
 	repo := repository.NewMemStorage()
 	a, err := agent.New(

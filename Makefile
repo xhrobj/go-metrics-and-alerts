@@ -6,7 +6,8 @@
 	test \
 	run-server \
 	run-server-env \
-	run-agent
+	run-agent \
+	run-agent-env
 
 SERVER=cmd/server/server
 AGENT=cmd/agent/agent
@@ -36,3 +37,6 @@ run-server-env: build-server
 
 run-agent: build-agent
 	./$(AGENT) -a=$(SERVER_ADDRESS_DEFAULT) -p=2 -r=10
+
+run-agent-env: build-agent
+	ADDRESS=$(SERVER_ADDRESS_ENV) POLL_INTERVAL=5 REPORT_INTERVAL=15 ./$(AGENT)

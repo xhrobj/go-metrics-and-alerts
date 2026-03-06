@@ -3,12 +3,19 @@ package config
 import (
 	"flag"
 	"os"
+	"strconv"
 
 	agentConfig "github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
 	serverConfig "github.com/xhrobj/go-metrics-and-alerts/internal/handler/config"
 )
 
-func GetAgentConfig() agentConfig.Config {
+// GetAgentConfig возвращает конфигурацию агента.
+//
+// Значения параметров могут быть заданы через флаги командной строки: -a -p -r
+// и переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL.
+//
+// Приоритет источников: env > flag > default.
+func GetAgentConfig() (agentConfig.Config, error) {
 	cfg := agentConfig.Config{}
 
 	flag.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address of the HTTP server (host:port)")
@@ -17,13 +24,26 @@ func GetAgentConfig() agentConfig.Config {
 
 	flag.Parse()
 
-	return cfg
+	if serverAddr := os.Getenv("ADDRESS"); serverAddr != "" {
+		cfg.ServerAddr = serverAddr
+	}
+
+	if pollIntervalInSec, ok, err := getEnvInt("POLL_INTERVAL"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.PollIntervalInSec = pollIntervalInSec
+	}
+
+	if reportIntervalInSec, ok, err := getEnvInt("REPORT_INTERVAL"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.ReportIntervalInSec = reportIntervalInSec
+	}
+
+	return cfg, nil
 }
 
 // GetServerConfig возвращает конфигурацию HTTP-сервера.
-//
-// Поддерживаемые параметры:
-//   - адрес и порт HTTP-сервера
 //
 // Значения параметров могут быть заданы через:
 //   - флаг -a
@@ -31,7 +51,6 @@ func GetAgentConfig() agentConfig.Config {
 //
 // Приоритет источников: env > flag > default.
 func GetServerConfig() serverConfig.Config {
-
 	cfg := serverConfig.Config{}
 
 	flag.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address and port to run server")
@@ -42,4 +61,15 @@ func GetServerConfig() serverConfig.Config {
 	}
 
 	return cfg
+}
+
+func getEnvInt(name string) (int, bool, error) {
+	if v := os.Getenv(name); v != "" {
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, false, err
+		}
+		return i, true, nil
+	}
+	return 0, false, nil
 }
