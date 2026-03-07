@@ -3,7 +3,6 @@ package handler
 import (
 	"fmt"
 	"html"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -77,8 +76,6 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	// success
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-
-	log.Printf("-> %s %s %s\n", metricType, metricName, metricValue)
 }
 
 // возвращает аккумулированное значение метрики в текстовом виде

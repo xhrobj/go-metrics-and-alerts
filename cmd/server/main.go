@@ -28,7 +28,7 @@ func run() error {
 
 	repo := repository.NewMemStorage()
 	h := handler.New(repo)
-	r := router.New(h)
+	r := router.New(h, zapLogger)
 
 	zapLogger.Info("running server",
 		zap.String("address", cfg.ServerAddr),
