@@ -264,7 +264,7 @@ Content-Type: text/plain; charset=utf-8
 Эту функциональность нужно реализовать через `middleware`. Используйте один из сторонних пакетов для логирования:
 
 - `github.com/rs/zerolog`,
-- `go.uber.org/zap`,
+- `go.uber.org/zap`, <-
 - `github.com/sirupsen/logrus`.
 
 Все сообщения логгера должны быть на уровне `Info`.
@@ -281,7 +281,7 @@ Content-Type: text/plain; charset=utf-8
 
 При реализации задействуйте одну из распространённых библиотек:
 
-- `encoding/json`
+- `encoding/json` <-
 - `github.com/mailru/easyjson`
 - `github.com/pquerna/ffjson`
 - `github.com/labstack/echo`
@@ -346,6 +346,4 @@ Content-Type: application/json
 
 - #16. Добавить API-метод: POST /update
 - #17. Добавить API-метод: POST /value
-
-- перевести агент на JSON
-- обновить тесты агента
+- #18. Перевести агент на отправку метрик через POST /update
