@@ -14,6 +14,7 @@ func testRouter(t *testing.T, h *handler.Handler) http.Handler {
 	t.Helper()
 
 	r := chi.NewRouter()
+	r.Post("/update", h.UpdateJSON)
 	r.Post("/update/{type}/{name}/{value}", h.Update)
 	r.Get("/value/{type}/{name}", h.Value)
 	r.Get("/", h.Index)
@@ -48,6 +49,38 @@ func TestHandler_Update_Gauge_OK(t *testing.T) {
 	}
 }
 
+// 200 OK для валидного POST /update с типом gauge
+func TestHandler_UpdateJSON_Gauge_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	h := handler.New(repo)
+	r := testRouter(t, h)
+
+	body := `{
+		"id": "Alloc",
+		"type": "gauge",
+		"value": 5.42
+	}`
+
+	rq := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(body))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	expected := 5.42
+	if got := repo.gauges["Alloc"]; got != expected {
+		t.Fatalf("expected %v, got %v", expected, got)
+	}
+
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type %q, got %q", "application/json", ct)
+	}
+}
+
 // 200 OK для валидного POST /update/counter/<name>/<value>
 func TestHandler_Update_Counter_OK(t *testing.T) {
 	repo := newMockServerStorage()
@@ -75,7 +108,39 @@ func TestHandler_Update_Counter_OK(t *testing.T) {
 	}
 }
 
-// два POST на одну counter-метрику -> счётчик суммируется
+// 200 OK для валидного POST /update с типом counter
+func TestHandler_UpdateJSON_Counter_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	h := handler.New(repo)
+	r := testRouter(t, h)
+
+	body := `{
+		"id": "PollCount",
+		"type": "counter",
+		"delta": 42
+	}`
+
+	rq := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(body))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	expected := int64(42)
+	if got := repo.counters["PollCount"]; got != expected {
+		t.Fatalf("expected %v, got %v", expected, got)
+	}
+
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type %q, got %q", "application/json", ct)
+	}
+}
+
+// два POST на одну counter-метрику (для /update/counter/...) -> счётчик суммируется
 func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	h := handler.New(repo)
@@ -96,10 +161,43 @@ func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 
 	expected := int64(84)
 	if got := repo.counters["PollCount"]; got != expected {
-		t.Fatalf("expected %v, got %v", expected, got)
+		t.Errorf("expected %v, got %v", expected, got)
 	}
 }
 
+// два POST на одну counter-метрику (для /update) -> счётчик суммируется
+func TestHandler_UpdateJSON_Counter_Accumulates_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	h := handler.New(repo)
+	r := testRouter(t, h)
+
+	body := `{
+		"id": "PollCount",
+		"type": "counter",
+		"delta": 42
+	}`
+
+	rq1 := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(body))
+	rq1.Header.Set("Content-Type", "application/json")
+	rr1 := httptest.NewRecorder()
+	r.ServeHTTP(rr1, rq1)
+
+	rq2 := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(body))
+	rq2.Header.Set("Content-Type", "application/json")
+	rr2 := httptest.NewRecorder()
+	r.ServeHTTP(rr2, rq2)
+
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr2.Code)
+	}
+
+	expected := int64(84)
+	if got := repo.counters["PollCount"]; got != expected {
+		t.Errorf("expected %v, got %v", expected, got)
+	}
+}
+
+// ассорти ошибок для POST /update/... (таблица кейсов)
 func TestHandler_Update_StatusCodes(t *testing.T) {
 	h := handler.New(newMockServerStorage())
 	r := testRouter(t, h)
@@ -152,7 +250,89 @@ func TestHandler_Update_StatusCodes(t *testing.T) {
 			r.ServeHTTP(rr, rq)
 
 			if rr.Code != tt.wantStatus {
-				t.Errorf("expected %d, got %d", tt.wantStatus, rr.Code)
+				t.Errorf("%s: expected %d, got %d", tt.name, tt.wantStatus, rr.Code)
+			}
+		})
+	}
+}
+
+// ассорти ошибок для POST /update (таблица кейсов)
+func TestHandler_UpdateJSON_StatusCodes(t *testing.T) {
+	h := handler.New(newMockServerStorage())
+	r := testRouter(t, h)
+
+	tests := []struct {
+		name        string
+		method      string
+		body        string
+		contentType string
+		wantStatus  int
+	}{
+		// 400 Bad Request -> если Content-Type не application/json:
+
+		{"bad content type", http.MethodPost, `{
+			"id": "Alloc",
+			"type": "gauge",
+			"value": 1
+		}`,
+			"text/plain", http.StatusBadRequest},
+
+		// 400 Bad Request -> если тип метрики неизвестен:
+
+		{"unknown type", http.MethodPost, `{
+			"id": "Alloc",
+			"type": "unknown",
+			"value": 1
+		}`,
+			"application/json", http.StatusBadRequest},
+
+		// 400 Bad Request -> если значение не парсится (float/int):
+
+		{"bad gauge value", http.MethodPost, `{
+			"id": "Alloc",
+			"type": "gauge",
+			"value": "abc"
+		}`,
+			"application/json", http.StatusBadRequest},
+
+		{"bad counter value", http.MethodPost, `{
+			"id": "PollCount",
+			"type": "counter",
+			"delta": 1.2
+		}`,
+			"application/json", http.StatusBadRequest},
+
+		// 404 Not Found -> если пустое имя метрики (кейс из требований):
+
+		{"empty name", http.MethodPost, `{
+			"id": "",
+			"type": "gauge",
+			"value": 1
+		}`,
+			"application/json", http.StatusNotFound},
+
+		// 405 Method Not Allowed -> если метод не POST:
+
+		{"method not allowed", http.MethodGet, `{
+			"id": "Alloc",
+			"type": "gauge",
+			"value": 1
+		}`,
+			"application/json", http.StatusMethodNotAllowed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rq := httptest.NewRequest(tt.method, "/update", strings.NewReader(tt.body))
+			if tt.contentType != "" {
+				rq.Header.Set("Content-Type", tt.contentType)
+			}
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, rq)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("%s: expected %d, got %d", tt.name, tt.wantStatus, rr.Code)
 			}
 		})
 	}
