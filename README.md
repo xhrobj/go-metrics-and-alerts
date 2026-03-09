@@ -346,4 +346,4 @@ Content-Type: application/json
 
 - #16. Добавить API-метод: POST /update
 - #17. Добавить API-метод: POST /value
-- #18. Перевести агент на отправку метрик через POST /update
+- #18. Перевести Агент на отправку метрик через POST /update
