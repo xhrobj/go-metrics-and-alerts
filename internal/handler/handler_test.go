@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
@@ -16,6 +17,8 @@ func testRouter(t *testing.T, h *handler.Handler) http.Handler {
 	t.Helper()
 
 	r := chi.NewRouter()
+
+	r.Use(middleware.StripSlashes)
 
 	r.Post("/update", h.UpdateJSON)
 	r.Post("/update/{type}/{name}/{value}", h.Update)
