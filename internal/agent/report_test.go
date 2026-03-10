@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -55,8 +56,18 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 			t.Fatalf("expected path /update, got %q", r.URL.Path)
 		}
 
+		if got := r.Header.Get("Content-Encoding"); got != "gzip" {
+			t.Fatalf("expected Content-Encoding gzip, got %q", got)
+		}
+
+		zr, err := gzip.NewReader(r.Body)
+		if err != nil {
+			t.Fatalf("failed to create gzip reader: %v", err)
+		}
+		defer zr.Close()
+
 		var m model.Metrics
-		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
+		if err := json.NewDecoder(zr).Decode(&m); err != nil {
 			t.Fatalf("failed to decode request body: %v", err)
 		}
 

@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -51,9 +54,20 @@ func (a *Agent) sendMetric(metric model.Metrics) error {
 	url := a.baseURL + "/update"
 	log.Printf("* %s", url)
 
+	body, err := json.Marshal(metric)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metric: %w", err)
+	}
+
+	compressedBody, err := gzipCompress(body)
+	if err != nil {
+		return fmt.Errorf("failed to compress metric: %w", err)
+	}
+
 	resp, err := a.client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(metric).
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(compressedBody).
 		Post(url)
 
 	if err != nil {
@@ -65,6 +79,24 @@ func (a *Agent) sendMetric(metric model.Metrics) error {
 	}
 
 	return nil
+}
+
+func gzipCompress(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+
+	zw := gzip.NewWriter(&buf)
+
+	_, err := zw.Write(data)
+	if err != nil {
+		return nil, err
+	}
+
+	err = zw.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 func logError(err error) {

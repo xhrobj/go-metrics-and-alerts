@@ -366,3 +366,4 @@ Content-Type: application/json
 
 - #19. Добавить gzip для Сервера
 - #20. Добавить gzip для Агента
+- #21. Ограничить gzip-сжатие только JSON и HTML
