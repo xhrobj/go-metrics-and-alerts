@@ -28,7 +28,7 @@ func New(repo ServerStorage) *Handler {
 	return &Handler{repo: repo}
 }
 
-// принимает метрику на хранение (данные метрики передаются через параметры URL)
+// Update принимает метрику на хранение (данные метрики передаются через параметры URL)
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	// method must be POST
 	if r.Method != http.MethodPost {
@@ -81,7 +81,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// принимает метрику на хранение (данные передаются в теле POST-запроса)
+// UpdateJSON принимает метрику на хранение (данные передаются в теле POST-запроса)
 func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 	// method must be POST
 	if r.Method != http.MethodPost {
@@ -115,26 +115,43 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
 		h.repo.UpdateGauge(metric.ID, *metric.Value)
+
+		writeJSON(w, http.StatusOK, model.Metrics{
+			ID:    metric.ID,
+			MType: model.Gauge,
+			Value: metric.Value,
+		})
 
 	case model.Counter:
 		if metric.Delta == nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
 		h.repo.UpdateCounter(metric.ID, *metric.Delta)
+
+		total, err := h.repo.GetCounter(metric.ID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, model.Metrics{
+			ID:    metric.ID,
+			MType: model.Counter,
+			Delta: &total,
+		})
 
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	// success
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 }
 
-// возвращает текущее значение метрики в текстовом виде (данные о метрике передаются через параметры URL)
+// Value возвращает текущее значение метрики в текстовом виде.
+// Данные о метрике передаются через параметры URL
 func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
@@ -169,7 +186,8 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(out))
 }
 
-// возвращает текущее значение метрики в текстовом виде (данные о метрике передаются в теле POST-запроса)
+// ValueJSON возвращает текущее значение метрики в формате JSON.
+// Идентификатор и тип метрики передаются в теле POST-запроса
 func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -194,47 +212,50 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var resp model.Metrics
-
 	switch metric.MType {
 	case model.Gauge:
 		value, err := h.repo.GetGauge(metric.ID)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
+			writeJSON(w, http.StatusNotFound, model.Metrics{
+				ID:    metric.ID,
+				MType: model.Gauge,
+			})
 			return
 		}
 
-		resp = model.Metrics{
+		writeJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Gauge,
 			Value: &value,
-		}
+		})
 
 	case model.Counter:
 		value, err := h.repo.GetCounter(metric.ID)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
+			writeJSON(w, http.StatusNotFound, model.Metrics{
+				ID:    metric.ID,
+				MType: model.Counter,
+			})
 			return
 		}
 
-		resp = model.Metrics{
+		writeJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Counter,
 			Delta: &value,
-		}
+		})
 
 	default:
 		// invalid type -> 404
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
+}
 
+func writeJSON(w http.ResponseWriter, status int, metric model.Metrics) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(metric)
 }
 
 // отдает страницу со списком имён и значений всех известных на текущий момент метрик
