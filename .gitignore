@@ -26,5 +26,6 @@ vendor/
 .DS_Store
 __MACOSX/
 
-#temp files
+#tmp files
 sandbox/
+tools/
