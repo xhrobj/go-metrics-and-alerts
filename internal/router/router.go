@@ -15,6 +15,7 @@ func New(h *handler.Handler, log *zap.Logger) http.Handler {
 
 	r.Use(chimiddleware.StripSlashes)
 	r.Use(appmiddleware.WithLogging(log))
+	r.Use(appmiddleware.WithGzip)
 
 	r.Post("/update", h.UpdateJSON)
 	r.HandleFunc("/update/{type}/{name}/{value}", h.Update)
