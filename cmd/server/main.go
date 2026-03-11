@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
@@ -36,6 +37,22 @@ func run() error {
 		if err := fileStorage.Load(repo); err != nil {
 			return err
 		}
+	}
+
+	if cfg.StoreIntervalInSec > 0 {
+		go func() {
+			ticker := time.NewTicker(time.Duration(cfg.StoreIntervalInSec) * time.Second)
+			defer ticker.Stop()
+
+			for range ticker.C {
+				if err := fileStorage.Save(repo); err != nil {
+					zapLogger.Error("failed to save metrics to file",
+						zap.String("path", cfg.FileStoragePath),
+						zap.Error(err),
+					)
+				}
+			}
+		}()
 	}
 
 	h := handler.New(repo)
