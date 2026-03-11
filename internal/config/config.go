@@ -11,8 +11,9 @@ import (
 
 // GetAgentConfig возвращает конфигурацию агента.
 //
-// Значения параметров могут быть заданы через флаги командной строки: -a -p -r
-// и переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL.
+// Значения параметров могут быть заданы через:
+//   - флаги: -a -p -r
+//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL.
 //
 // Приоритет источников: env > flag > default.
 func GetAgentConfig() (agentConfig.Config, error) {
