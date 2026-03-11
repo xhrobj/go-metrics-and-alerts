@@ -46,21 +46,41 @@ func GetAgentConfig() (agentConfig.Config, error) {
 // GetServerConfig возвращает конфигурацию HTTP-сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаг -a
-//   - переменную окружения ADDRESS
+//   - флаги: -a -i -f -r
+//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE
 //
 // Приоритет источников: env > flag > default.
-func GetServerConfig() serverConfig.Config {
+func GetServerConfig() (serverConfig.Config, error) {
 	cfg := serverConfig.Config{}
 
 	flag.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address and port to run server")
+	flag.IntVar(&cfg.StoreIntervalInSec, "i", 300, "store interval in seconds")
+	flag.StringVar(&cfg.FileStoragePath, "f", "metrics-db.json", "path to metrics storage file")
+	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file on startup")
+
 	flag.Parse()
 
 	if serverAddr := os.Getenv("ADDRESS"); serverAddr != "" {
 		cfg.ServerAddr = serverAddr
 	}
 
-	return cfg
+	if storeIntervalInSec, ok, err := getEnvInt("STORE_INTERVAL"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.StoreIntervalInSec = storeIntervalInSec
+	}
+
+	if fileStoragePath := os.Getenv("FILE_STORAGE_PATH"); fileStoragePath != "" {
+		cfg.FileStoragePath = fileStoragePath
+	}
+
+	if restore, ok, err := getEnvBool("RESTORE"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.Restore = restore
+	}
+
+	return cfg, nil
 }
 
 func getEnvInt(name string) (int, bool, error) {
@@ -72,4 +92,15 @@ func getEnvInt(name string) (int, bool, error) {
 		return i, true, nil
 	}
 	return 0, false, nil
+}
+
+func getEnvBool(name string) (bool, bool, error) {
+	if v := os.Getenv(name); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return false, false, err
+		}
+		return b, true, nil
+	}
+	return false, false, nil
 }

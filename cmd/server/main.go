@@ -19,7 +19,10 @@ func main() {
 }
 
 func run() error {
-	cfg := config.GetServerConfig()
+	cfg, err := config.GetServerConfig()
+	if err != nil {
+		return err
+	}
 
 	zapLogger, err := logger.New()
 	if err != nil {
