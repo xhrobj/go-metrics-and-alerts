@@ -30,6 +30,15 @@ func run() error {
 	}
 
 	repo := repository.NewMemStorage()
+
+	/* repo.UpdateGauge("Alloc", 123.45)
+	repo.UpdateCounter("PollCount", 7)
+
+	fileStorage := repository.NewFileStorage("metrics-db.json")
+	if err := fileStorage.Save(repo); err != nil {
+		return err
+	} */
+
 	h := handler.New(repo)
 	r := router.New(h, zapLogger)
 
