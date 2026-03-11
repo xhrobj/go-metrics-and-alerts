@@ -87,3 +87,16 @@ func (m *MemStorage) Snapshot() (gaugesCopy map[string]float64, countersCopy map
 
 	return
 }
+
+// SetGauge восстанавливает значение gauge-метрики.
+func (m *MemStorage) SetGauge(name string, value float64) {
+	m.UpdateGauge(name, value)
+}
+
+// SetCounter восстанавливает значение counter-метрики.
+func (m *MemStorage) SetCounter(name string, value int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.counters[name] = value
+}
