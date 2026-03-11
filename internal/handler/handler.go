@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
 type ServerStorage interface {
@@ -21,11 +22,17 @@ type ServerStorage interface {
 }
 
 type Handler struct {
-	repo ServerStorage
+	repo            ServerStorage
+	syncFileStorage *repository.FileStorage
 }
 
 func New(repo ServerStorage) *Handler {
 	return &Handler{repo: repo}
+}
+
+// SetSyncPersistence включает синхронное сохранение метрик.
+func (h *Handler) SetSyncPersistence(fileStorage *repository.FileStorage) {
+	h.syncFileStorage = fileStorage
 }
 
 // Update принимает метрику на хранение (данные метрики передаются через параметры URL)
@@ -63,6 +70,11 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		h.repo.UpdateGauge(metricName, value)
 
+		if err := h.saveIfSync(); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 	case model.Counter:
 		value, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
@@ -70,6 +82,11 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.repo.UpdateCounter(metricName, value)
+
+		if err := h.saveIfSync(); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 	default:
 		w.WriteHeader(http.StatusBadRequest)
@@ -118,6 +135,11 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 
 		h.repo.UpdateGauge(metric.ID, *metric.Value)
 
+		if err := h.saveIfSync(); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 		writeJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Gauge,
@@ -131,6 +153,11 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		}
 
 		h.repo.UpdateCounter(metric.ID, *metric.Delta)
+
+		if err := h.saveIfSync(); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		total, err := h.repo.GetCounter(metric.ID)
 		if err != nil {
@@ -281,4 +308,12 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(out.String()))
+}
+
+func (h *Handler) saveIfSync() error {
+	if h.syncFileStorage == nil {
+		return nil
+	}
+
+	return h.syncFileStorage.Save(h.repo)
 }

@@ -39,7 +39,11 @@ func run() error {
 		}
 	}
 
-	if cfg.StoreIntervalInSec > 0 {
+	h := handler.New(repo)
+
+	if cfg.StoreIntervalInSec == 0 {
+		h.SetSyncPersistence(fileStorage)
+	} else if cfg.StoreIntervalInSec > 0 {
 		go func() {
 			ticker := time.NewTicker(time.Duration(cfg.StoreIntervalInSec) * time.Second)
 			defer ticker.Stop()
@@ -55,11 +59,13 @@ func run() error {
 		}()
 	}
 
-	h := handler.New(repo)
 	r := router.New(h, zapLogger)
 
 	zapLogger.Info("running server",
 		zap.String("address", cfg.ServerAddr),
+		zap.String("fileStoragePath", cfg.FileStoragePath),
+		zap.Bool("restore", cfg.Restore),
+		zap.Int("storeIntervalInSec", cfg.StoreIntervalInSec),
 	)
 
 	return http.ListenAndServe(cfg.ServerAddr, r)
