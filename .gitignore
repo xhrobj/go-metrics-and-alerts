@@ -18,6 +18,9 @@ cmd/server/server
 # Dependency directories (remove the comment below to include it)
 vendor/
 
+#runtime data
+**/metrics-db.json
+
 # IDEs directories
 .idea
 .vscode
@@ -26,5 +29,6 @@ vendor/
 .DS_Store
 __MACOSX/
 
-#temp files
+#tmp files
 sandbox/
+tools/
