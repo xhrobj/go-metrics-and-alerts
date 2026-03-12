@@ -7,7 +7,7 @@ import (
 
 // MemStorage хранит метрики в памяти.
 type MemStorage struct {
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	gauges   map[string]float64
 	counters map[string]int64
 }
@@ -46,8 +46,8 @@ func (m *MemStorage) ResetCounter(name string) {
 
 // GetGauge возвращает значение gauge-метрики.
 func (m *MemStorage) GetGauge(name string) (float64, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	value, saved := m.gauges[name]
 	if !saved {
@@ -59,8 +59,8 @@ func (m *MemStorage) GetGauge(name string) (float64, error) {
 
 // GetCounter возвращает значение counter-метрики.
 func (m *MemStorage) GetCounter(name string) (int64, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	value, saved := m.counters[name]
 	if !saved {
@@ -72,8 +72,8 @@ func (m *MemStorage) GetCounter(name string) (int64, error) {
 
 // Snapshot возвращает копию всех метрик.
 func (m *MemStorage) Snapshot() (gaugesCopy map[string]float64, countersCopy map[string]int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	gaugesCopy = make(map[string]float64, len(m.gauges))
 	for k, v := range m.gauges {
