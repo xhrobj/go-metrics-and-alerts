@@ -1,5 +1,7 @@
 # go-musthave-metrics-tpl
 
+[![CI](https://github.com/xhrobj/go-metrics-and-alerts/actions/workflows/go.yml/badge.svg)](https://github.com/xhrobj/go-metrics-and-alerts/actions)
+
 Шаблон репозитория для трека «Сервер сбора метрик и алертинга».
 
 ## Начало работы
