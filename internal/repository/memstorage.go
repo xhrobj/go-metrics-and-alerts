@@ -21,35 +21,27 @@ func NewMemStorage() *MemStorage {
 }
 
 // UpdateGauge сохраняет значение gauge-метрики.
-func (m *MemStorage) UpdateGauge(name string, value float64) {
+func (m *MemStorage) UpdateGauge(metricName string, value float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.gauges[name] = value
+	m.gauges[metricName] = value
 }
 
 // UpdateCounter увеличивает значение counter-метрики на delta.
-func (m *MemStorage) UpdateCounter(name string, delta int64) {
+func (m *MemStorage) UpdateCounter(metricName string, delta int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.counters[name] += delta
-}
-
-// ResetCounter сбрасывает значение counter-метрики в 0.
-func (m *MemStorage) ResetCounter(name string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.counters[name] = 0
+	m.counters[metricName] += delta
 }
 
 // GetGauge возвращает значение gauge-метрики.
-func (m *MemStorage) GetGauge(name string) (float64, error) {
+func (m *MemStorage) GetGauge(metricName string) (float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	value, saved := m.gauges[name]
+	value, saved := m.gauges[metricName]
 	if !saved {
 		return 0, errors.New("no data")
 	}
@@ -58,16 +50,16 @@ func (m *MemStorage) GetGauge(name string) (float64, error) {
 }
 
 // GetCounter возвращает значение counter-метрики.
-func (m *MemStorage) GetCounter(name string) (int64, error) {
+func (m *MemStorage) GetCounter(metricName string) (int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	value, saved := m.counters[name]
+	total, saved := m.counters[metricName]
 	if !saved {
 		return 0, errors.New("no data")
 	}
 
-	return value, nil
+	return total, nil
 }
 
 // Snapshot возвращает копию всех метрик.
@@ -88,15 +80,15 @@ func (m *MemStorage) Snapshot() (gaugesCopy map[string]float64, countersCopy map
 	return
 }
 
-// SetGauge восстанавливает значение gauge-метрики.
-func (m *MemStorage) SetGauge(name string, value float64) {
-	m.UpdateGauge(name, value)
+// SetGauge устанавливает значение gauge-метрики.
+func (m *MemStorage) SetGauge(metricName string, value float64) {
+	m.UpdateGauge(metricName, value)
 }
 
-// SetCounter восстанавливает значение counter-метрики.
-func (m *MemStorage) SetCounter(name string, value int64) {
+// SetCounter устанавливает значение counter-метрики.
+func (m *MemStorage) SetCounter(metricName string, delta int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.counters[name] = value
+	m.counters[metricName] = delta
 }

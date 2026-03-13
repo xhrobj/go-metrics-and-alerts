@@ -10,6 +10,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/router"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
 	"go.uber.org/zap"
 )
 
@@ -25,32 +26,32 @@ func run() error {
 		return err
 	}
 
-	zapLogger, err := logger.New()
+	log, err := logger.New()
 	if err != nil {
 		return err
 	}
 
 	repo := repository.NewMemStorage()
-	fileStorage := repository.NewFileStorage(cfg.FileStoragePath)
+	store := repository.NewFileStore(cfg.FileStoragePath)
 
 	if cfg.Restore {
-		if err := fileStorage.Load(repo); err != nil {
+		if err := store.Load(repo); err != nil {
 			return err
 		}
 	}
 
-	h := handler.New(repo)
+	svc := service.NewMetricsService(repo)
 
 	if cfg.StoreIntervalInSec == 0 {
-		h.SetSyncPersistence(fileStorage)
+		svc.EnableSyncSave(store)
 	} else if cfg.StoreIntervalInSec > 0 {
 		go func() {
 			ticker := time.NewTicker(time.Duration(cfg.StoreIntervalInSec) * time.Second)
 			defer ticker.Stop()
 
 			for range ticker.C {
-				if err := fileStorage.Save(repo); err != nil {
-					zapLogger.Error("failed to save metrics to file",
+				if err := store.Save(repo); err != nil {
+					log.Error("failed to save metrics to file",
 						zap.String("path", cfg.FileStoragePath),
 						zap.Error(err),
 					)
@@ -59,9 +60,10 @@ func run() error {
 		}()
 	}
 
-	r := router.New(h, zapLogger)
+	h := handler.New(svc)
+	r := router.New(h, log)
 
-	zapLogger.Info("running server",
+	log.Info("running server",
 		zap.String("address", cfg.ServerAddr),
 		zap.String("fileStoragePath", cfg.FileStoragePath),
 		zap.Bool("restore", cfg.Restore),

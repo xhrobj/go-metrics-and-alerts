@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
 )
 
 func testRouter(t *testing.T, h *handler.Handler) http.Handler {
@@ -34,7 +35,8 @@ func testRouter(t *testing.T, h *handler.Handler) http.Handler {
 // 200 OK для валидного POST /update/gauge/<name>/<value>
 func TestHandler_Update_Gauge_OK(t *testing.T) {
 	repo := newMockServerStorage()
-	h := handler.New(repo)
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv)
 	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/gauge/Alloc/5.42", nil)
@@ -61,7 +63,8 @@ func TestHandler_Update_Gauge_OK(t *testing.T) {
 // 200 OK для валидного POST /update с типом gauge
 func TestHandler_UpdateJSON_Gauge_OK(t *testing.T) {
 	repo := newMockServerStorage()
-	h := handler.New(repo)
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv)
 	r := testRouter(t, h)
 
 	body := `{
@@ -93,7 +96,8 @@ func TestHandler_UpdateJSON_Gauge_OK(t *testing.T) {
 // 200 OK для валидного POST /update/counter/<name>/<value>
 func TestHandler_Update_Counter_OK(t *testing.T) {
 	repo := newMockServerStorage()
-	h := handler.New(repo)
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv)
 	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
@@ -120,7 +124,8 @@ func TestHandler_Update_Counter_OK(t *testing.T) {
 // 200 OK для валидного POST /update с типом counter
 func TestHandler_UpdateJSON_Counter_OK(t *testing.T) {
 	repo := newMockServerStorage()
-	h := handler.New(repo)
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv)
 	r := testRouter(t, h)
 
 	body := `{
@@ -152,7 +157,8 @@ func TestHandler_UpdateJSON_Counter_OK(t *testing.T) {
 // два POST на одну counter-метрику (для /update/counter/...) -> счётчик суммируется
 func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 	repo := newMockServerStorage()
-	h := handler.New(repo)
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv)
 	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
@@ -177,7 +183,8 @@ func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 // два POST на одну counter-метрику (для /update) -> счётчик суммируется
 func TestHandler_UpdateJSON_Counter_Accumulates_OK(t *testing.T) {
 	repo := newMockServerStorage()
-	h := handler.New(repo)
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv)
 	r := testRouter(t, h)
 
 	body := `{
@@ -208,7 +215,8 @@ func TestHandler_UpdateJSON_Counter_Accumulates_OK(t *testing.T) {
 
 // ассорти ошибок для POST /update/... (таблица кейсов)
 func TestHandler_Update_StatusCodes(t *testing.T) {
-	h := handler.New(newMockServerStorage())
+	srv := service.NewMetricsService(newMockServerStorage())
+	h := handler.New(srv)
 	r := testRouter(t, h)
 
 	tests := []struct {
@@ -267,7 +275,8 @@ func TestHandler_Update_StatusCodes(t *testing.T) {
 
 // ассорти ошибок для POST /update (таблица кейсов)
 func TestHandler_UpdateJSON_StatusCodes(t *testing.T) {
-	h := handler.New(newMockServerStorage())
+	srv := service.NewMetricsService(newMockServerStorage())
+	h := handler.New(srv)
 	r := testRouter(t, h)
 
 	tests := []struct {
@@ -425,7 +434,8 @@ func TestHandler_Value(t *testing.T) {
 			repo := newMockServerStorage()
 			tt.seed(repo)
 
-			h := handler.New(repo)
+			srv := service.NewMetricsService(repo)
+			h := handler.New(srv)
 			r := testRouter(t, h)
 
 			rq := httptest.NewRequest(http.MethodGet, tt.path, nil)
@@ -516,7 +526,8 @@ func TestHandler_ValueJSON(t *testing.T) {
 			repo := newMockServerStorage()
 			tt.seed(repo)
 
-			h := handler.New(repo)
+			srv := service.NewMetricsService(repo)
+			h := handler.New(srv)
 			r := testRouter(t, h)
 
 			rq := httptest.NewRequest(http.MethodPost, "/value", strings.NewReader(tt.body))
@@ -568,7 +579,8 @@ func TestHandler_Index_OK(t *testing.T) {
 	repo.gauges["Alloc"] = 5.42
 	repo.counters["PollCount"] = 42
 
-	h := handler.New(repo)
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv)
 	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodGet, "/", nil)

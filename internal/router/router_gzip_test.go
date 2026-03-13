@@ -14,11 +14,13 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/router"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
 )
 
 func TestGzipMiddleware(t *testing.T) {
 	repo := repository.NewMemStorage()
-	h := handler.New(repo)
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv)
 	log := zap.NewNop()
 
 	r := router.New(h, log)

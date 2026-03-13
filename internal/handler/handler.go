@@ -10,32 +10,34 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
-type ServerStorage interface {
-	UpdateGauge(string, float64)
-	UpdateCounter(string, int64)
-	Snapshot() (map[string]float64, map[string]int64)
+// Service описывает бизнес-логику работы с метриками,
+// используемую HTTP-обработчиками.
+type Service interface {
+	UpdateGauge(string, float64) error
+	UpdateCounter(string, int64) (int64, error)
+
 	GetGauge(string) (float64, error)
 	GetCounter(string) (int64, error)
+
+	Snapshot() (map[string]float64, map[string]int64)
 }
 
+// Handler обрабатывает HTTP-запросы, связанные с метриками.
 type Handler struct {
-	repo            ServerStorage
-	syncFileStorage *repository.FileStorage
+	service Service
 }
 
-func New(repo ServerStorage) *Handler {
-	return &Handler{repo: repo}
+// New создаёт новый Handler, использующий переданный сервис метрик.
+func New(service Service) *Handler {
+	return &Handler{
+		service: service,
+	}
 }
 
-// SetSyncPersistence включает синхронное сохранение метрик.
-func (h *Handler) SetSyncPersistence(fileStorage *repository.FileStorage) {
-	h.syncFileStorage = fileStorage
-}
-
-// Update принимает метрику на хранение (данные метрики передаются через параметры URL)
+// Update принимает метрику на хранение.
+// Данные метрики передаются через параметры URL.
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	// method must be POST
 	if r.Method != http.MethodPost {
@@ -68,22 +70,20 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		h.repo.UpdateGauge(metricName, value)
 
-		if err := h.saveIfSync(); err != nil {
+		if err := h.service.UpdateGauge(metricName, value); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 	case model.Counter:
-		value, err := strconv.ParseInt(metricValue, 10, 64)
+		delta, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		h.repo.UpdateCounter(metricName, value)
 
-		if err := h.saveIfSync(); err != nil {
+		if _, err := h.service.UpdateCounter(metricName, delta); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -98,7 +98,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// UpdateJSON принимает метрику на хранение (данные передаются в теле POST-запроса)
+// UpdateJSON принимает метрику на хранение.
+// Данные метрики передаются в теле POST-запроса в формате JSON.
 func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 	// method must be POST
 	if r.Method != http.MethodPost {
@@ -133,9 +134,7 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.repo.UpdateGauge(metric.ID, *metric.Value)
-
-		if err := h.saveIfSync(); err != nil {
+		if err := h.service.UpdateGauge(metric.ID, *metric.Value); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -152,14 +151,7 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.repo.UpdateCounter(metric.ID, *metric.Delta)
-
-		if err := h.saveIfSync(); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		total, err := h.repo.GetCounter(metric.ID)
+		total, err := h.service.UpdateCounter(metric.ID, *metric.Delta)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -178,7 +170,7 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 // Value возвращает текущее значение метрики в текстовом виде.
-// Данные о метрике передаются через параметры URL
+// Тип и имя метрики передаются через параметры URL.
 func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
@@ -192,14 +184,14 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	out := ""
 	switch metricType {
 	case model.Gauge:
-		value, err := h.repo.GetGauge(metricName)
+		value, err := h.service.GetGauge(metricName)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		out = strconv.FormatFloat(value, 'f', -1, 64)
 	case model.Counter:
-		value, err := h.repo.GetCounter(metricName)
+		value, err := h.service.GetCounter(metricName)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -214,7 +206,7 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 }
 
 // ValueJSON возвращает текущее значение метрики в формате JSON.
-// Идентификатор и тип метрики передаются в теле POST-запроса
+// Идентификатор и тип метрики передаются в теле POST-запроса.
 func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -241,7 +233,7 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 
 	switch metric.MType {
 	case model.Gauge:
-		value, err := h.repo.GetGauge(metric.ID)
+		value, err := h.service.GetGauge(metric.ID)
 		if err != nil {
 			writeJSON(w, http.StatusNotFound, model.Metrics{
 				ID:    metric.ID,
@@ -257,7 +249,7 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case model.Counter:
-		value, err := h.repo.GetCounter(metric.ID)
+		value, err := h.service.GetCounter(metric.ID)
 		if err != nil {
 			writeJSON(w, http.StatusNotFound, model.Metrics{
 				ID:    metric.ID,
@@ -279,15 +271,10 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func writeJSON(w http.ResponseWriter, status int, metric model.Metrics) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(metric)
-}
-
-// отдает страницу со списком имён и значений всех известных на текущий момент метрик
+// Index возвращает HTML-страницу со списком всех известных метрик
+// и их текущих значений.
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
-	gauges, counters := h.repo.Snapshot()
+	gauges, counters := h.service.Snapshot()
 
 	var out strings.Builder
 	out.WriteString("<!doctype html><html><head><meta charset=\"utf-8\">")
@@ -310,10 +297,8 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(out.String()))
 }
 
-func (h *Handler) saveIfSync() error {
-	if h.syncFileStorage == nil {
-		return nil
-	}
-
-	return h.syncFileStorage.Save(h.repo)
+func writeJSON(w http.ResponseWriter, status int, metric model.Metrics) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(metric)
 }

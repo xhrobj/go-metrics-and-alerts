@@ -13,24 +13,24 @@ type Snapshotter interface {
 	Snapshot() (map[string]float64, map[string]int64)
 }
 
-// FileStorage отвечает за сохранение метрик в файл.
-type FileStorage struct {
+// Restorer описывает хранилище, в которое можно записать восстановленные метрики.
+type Restorer interface {
+	SetGauge(metricName string, value float64)
+	SetCounter(metricName string, delta int64)
+}
+
+// FileStore сохраняет и загружает метрики из файла.
+type FileStore struct {
 	path string
 }
 
-// Restorer описывает хранилище, в которое можно восстановить метрики.
-type Restorer interface {
-	SetGauge(name string, value float64)
-	SetCounter(name string, value int64)
-}
-
-// NewFileStorage создаёт файловое хранилище метрик.
-func NewFileStorage(path string) *FileStorage {
-	return &FileStorage{path: path}
+// NewFileStore создаёт FileStore для работы с файлом метрик.
+func NewFileStore(path string) *FileStore {
+	return &FileStore{path: path}
 }
 
 // Save сохраняет все текущие метрики в файл в формате JSON.
-func (f *FileStorage) Save(repo Snapshotter) error {
+func (f *FileStore) Save(repo Snapshotter) error {
 	gauges, counters := repo.Snapshot()
 
 	metrics := make([]model.Metrics, 0, len(gauges)+len(counters))
@@ -62,7 +62,7 @@ func (f *FileStorage) Save(repo Snapshotter) error {
 }
 
 // Load загружает метрики из файла в хранилище.
-func (f *FileStorage) Load(repo Restorer) error {
+func (f *FileStore) Load(repo Restorer) error {
 	data, err := os.ReadFile(f.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

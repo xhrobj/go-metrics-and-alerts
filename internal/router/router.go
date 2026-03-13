@@ -10,6 +10,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// New создаёт и настраивает HTTP-роутер:
+// регистрирует маршруты и подключает middleware.
 func New(h *handler.Handler, log *zap.Logger) http.Handler {
 	r := chi.NewRouter()
 
@@ -22,8 +24,8 @@ func New(h *handler.Handler, log *zap.Logger) http.Handler {
 		w.Write([]byte("pong"))
 	})
 
-	r.Post("/update", h.UpdateJSON)
 	r.HandleFunc("/update/{type}/{name}/{value}", h.Update)
+	r.Post("/update", h.UpdateJSON)
 
 	r.Get("/value/{type}/{name}", h.Value)
 	r.Post("/value", h.ValueJSON)
