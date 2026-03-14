@@ -58,7 +58,12 @@ func GetServerConfig() (serverConfig.Config, error) {
 	flag.IntVar(&cfg.StoreIntervalInSec, "i", 300, "store interval in seconds")
 	flag.StringVar(&cfg.FileStoragePath, "f", "metrics-db.json", "path to metrics storage file")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file on startup")
-	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database connection string")
+	flag.StringVar(
+		&cfg.DatabaseDSN,
+		"d",
+		"postgres://metrics:password@localhost:5432/metricsdb",
+		"database connection string",
+	)
 
 	flag.Parse()
 

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"database/sql"
+
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
@@ -12,6 +14,8 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/router"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
 	"go.uber.org/zap"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -26,9 +30,23 @@ func run() error {
 		return err
 	}
 
-	log, err := logger.New()
+	lg, err := logger.New()
 	if err != nil {
 		return err
+	}
+
+	if cfg.DatabaseDSN != "" {
+		db, err := sql.Open("pgx", cfg.DatabaseDSN)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+
+		if err := db.Ping(); err != nil {
+			return err
+		}
+
+		lg.Info("(-_-) database connected")
 	}
 
 	repo := repository.NewMemStorage()
@@ -51,7 +69,7 @@ func run() error {
 
 			for range ticker.C {
 				if err := store.Save(repo); err != nil {
-					log.Error("failed to save metrics to file",
+					lg.Error("failed to save metrics to file",
 						zap.String("path", cfg.FileStoragePath),
 						zap.Error(err),
 					)
@@ -61,9 +79,9 @@ func run() error {
 	}
 
 	h := handler.New(svc)
-	r := router.New(h, log)
+	r := router.New(h, lg)
 
-	log.Info("running server",
+	lg.Info("running server",
 		zap.String("address", cfg.ServerAddr),
 		zap.String("fileStoragePath", cfg.FileStoragePath),
 		zap.Bool("restore", cfg.Restore),

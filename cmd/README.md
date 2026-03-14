@@ -47,3 +47,76 @@ cmd/
 ├── agent/   # бинарное приложение Агента
 └── server/  # бинарное приложение Сервера
 ```
+
+## Запуск через Makefile
+
+Для сборки и запуска приложений можно использовать команды `Makefile`.
+
+### Сборка
+
+```bash
+make build
+```
+
+Или отдельно:
+
+```bash
+make build-server
+make build-agent
+```
+
+### Запуск тестов
+
+```bash
+make test
+```
+
+### Запуск PostgreSQL для локальной разработки
+
+Первичный запуск контейнера:
+
+```bash
+make postgres-up
+```
+
+Повторный запуск уже созданного контейнера:
+
+```bash
+make postgres-start
+```
+
+Остановка контейнера:
+
+```bash
+make postgres-stop
+```
+
+Удаление контейнера:
+
+```bash
+make postgres-rm
+```
+
+### Запуск Сервера
+
+```bash
+make run-server
+```
+
+или с использованием переменных окружения:
+
+```bash
+make run-server-env
+```
+
+### Запуск Агента
+
+```bash
+make run-agent
+```
+
+или с использованием переменных окружения:
+
+```bash
+make run-agent-env
+```
