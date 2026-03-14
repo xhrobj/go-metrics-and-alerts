@@ -36,7 +36,7 @@ func testRouter(t *testing.T, h *handler.Handler) http.Handler {
 func TestHandler_Update_Gauge_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/gauge/Alloc/5.42", nil)
@@ -64,7 +64,7 @@ func TestHandler_Update_Gauge_OK(t *testing.T) {
 func TestHandler_UpdateJSON_Gauge_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
 	body := `{
@@ -97,7 +97,7 @@ func TestHandler_UpdateJSON_Gauge_OK(t *testing.T) {
 func TestHandler_Update_Counter_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
@@ -125,7 +125,7 @@ func TestHandler_Update_Counter_OK(t *testing.T) {
 func TestHandler_UpdateJSON_Counter_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
 	body := `{
@@ -158,7 +158,7 @@ func TestHandler_UpdateJSON_Counter_OK(t *testing.T) {
 func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
@@ -184,7 +184,7 @@ func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 func TestHandler_UpdateJSON_Counter_Accumulates_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
 	body := `{
@@ -216,7 +216,7 @@ func TestHandler_UpdateJSON_Counter_Accumulates_OK(t *testing.T) {
 // ассорти ошибок для POST /update/... (таблица кейсов)
 func TestHandler_Update_StatusCodes(t *testing.T) {
 	srv := service.NewMetricsService(newMockServerStorage())
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
 	tests := []struct {
@@ -276,7 +276,7 @@ func TestHandler_Update_StatusCodes(t *testing.T) {
 // ассорти ошибок для POST /update (таблица кейсов)
 func TestHandler_UpdateJSON_StatusCodes(t *testing.T) {
 	srv := service.NewMetricsService(newMockServerStorage())
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
 	tests := []struct {
@@ -435,7 +435,7 @@ func TestHandler_Value(t *testing.T) {
 			tt.seed(repo)
 
 			srv := service.NewMetricsService(repo)
-			h := handler.New(srv)
+			h := handler.New(srv, nil)
 			r := testRouter(t, h)
 
 			rq := httptest.NewRequest(http.MethodGet, tt.path, nil)
@@ -527,7 +527,7 @@ func TestHandler_ValueJSON(t *testing.T) {
 			tt.seed(repo)
 
 			srv := service.NewMetricsService(repo)
-			h := handler.New(srv)
+			h := handler.New(srv, nil)
 			r := testRouter(t, h)
 
 			rq := httptest.NewRequest(http.MethodPost, "/value", strings.NewReader(tt.body))
@@ -580,7 +580,7 @@ func TestHandler_Index_OK(t *testing.T) {
 	repo.counters["PollCount"] = 42
 
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
 	rq := httptest.NewRequest(http.MethodGet, "/", nil)

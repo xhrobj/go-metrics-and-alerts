@@ -424,7 +424,7 @@ Content-Type: application/json
 
 Для работы с БД используйте один из следующих пакетов:
 
-- `database/sql`,
+- `database/sql`, <-
 - `github.com/jackc/pgx`, <-
 - `github.com/lib/pq`,
 - `github.com/jmoiron/sqlx`.

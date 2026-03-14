@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -27,12 +28,14 @@ type Service interface {
 // Handler обрабатывает HTTP-запросы, связанные с метриками.
 type Handler struct {
 	service Service
+	db      *sql.DB
 }
 
-// New создаёт новый Handler, использующий переданный сервис метрик.
-func New(service Service) *Handler {
+// New создаёт новый Handler, использующий переданный сервис метрик и соединение с БД
+func New(service Service, db *sql.DB) *Handler {
 	return &Handler{
 		service: service,
+		db:      db,
 	}
 }
 
@@ -295,6 +298,21 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(out.String()))
+}
+
+// Ping проверяет соединение с базой данных.
+func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
+	if h.db == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.db.Ping(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func writeJSON(w http.ResponseWriter, status int, metric model.Metrics) {

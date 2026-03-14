@@ -35,8 +35,9 @@ func run() error {
 		return err
 	}
 
+	var db *sql.DB
 	if cfg.DatabaseDSN != "" {
-		db, err := sql.Open("pgx", cfg.DatabaseDSN)
+		db, err = sql.Open("pgx", cfg.DatabaseDSN)
 		if err != nil {
 			return err
 		}
@@ -46,7 +47,9 @@ func run() error {
 			return err
 		}
 
-		lg.Info("(-_-) database connected")
+		lg.Debug("database connected")
+	} else {
+		lg.Debug("database disabled")
 	}
 
 	repo := repository.NewMemStorage()
@@ -78,7 +81,7 @@ func run() error {
 		}()
 	}
 
-	h := handler.New(svc)
+	h := handler.New(svc, db)
 	r := router.New(h, lg)
 
 	lg.Info("running server",
