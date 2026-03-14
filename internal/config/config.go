@@ -47,8 +47,8 @@ func GetAgentConfig() (agentConfig.Config, error) {
 // GetServerConfig возвращает конфигурацию HTTP-сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -i -f -r
-//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE
+//   - флаги: -a -i -f -r -d
+//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN
 //
 // Приоритет источников: env > flag > default.
 func GetServerConfig() (serverConfig.Config, error) {
@@ -58,6 +58,7 @@ func GetServerConfig() (serverConfig.Config, error) {
 	flag.IntVar(&cfg.StoreIntervalInSec, "i", 300, "store interval in seconds")
 	flag.StringVar(&cfg.FileStoragePath, "f", "metrics-db.json", "path to metrics storage file")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file on startup")
+	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database connection string")
 
 	flag.Parse()
 
@@ -79,6 +80,10 @@ func GetServerConfig() (serverConfig.Config, error) {
 		return cfg, err
 	} else if ok {
 		cfg.Restore = restore
+	}
+
+	if databaseDSN := os.Getenv("DATABASE_DSN"); databaseDSN != "" {
+		cfg.DatabaseDSN = databaseDSN
 	}
 
 	return cfg, nil

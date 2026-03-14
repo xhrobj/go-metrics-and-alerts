@@ -16,11 +16,12 @@
 - флаг `-i` или env `STORE_INTERVAL` —> интервал сохранения метрик на диск в секундах (по умолчанию `300`)
 - флаг `-f` или env `FILE_STORAGE_PATH` —> путь к файлу хранения метрик (по умолчанию `metrics-db.json`)
 - флаг `-r` или env `RESTORE` —> загружать метрики из файла при старте (по умолчанию `false`)
+- флаг `-d` или env `DATABASE_DSN` —> строка подключения к базе данных (по умолчанию ``)
 
 ## Пример запуска
 
 ```bash
-./server -a localhost:8080 -i 300 -f metrics-db.json -r=true
+./server -a localhost:8080 -i 300 -f metrics-db.json -r=true -d=FIXME
 ```
 
 или через переменные окружения:
@@ -30,6 +31,7 @@ ADDRESS=localhost:8080
 STORE_INTERVAL=300
 FILE_STORAGE_PATH=metrics-db.json
 RESTORE=true
+DATABASE_DSN=FIXME
 
 ./server
 ```
