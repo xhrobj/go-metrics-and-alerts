@@ -20,7 +20,6 @@ type Agent struct {
 	pollIntervalInSec   int
 	reportIntervalInSec int
 	client              *resty.Client
-	uptime              int
 	pollSinceReport     int
 }
 
@@ -51,18 +50,18 @@ func New(
 }
 
 func (a *Agent) Run() {
-	for {
-		a.tick()
-		time.Sleep(1 * time.Second)
-	}
-}
+	pollTicker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
+	reportTicker := time.NewTicker(time.Duration(a.reportIntervalInSec) * time.Second)
 
-func (a *Agent) tick() {
-	if a.uptime%a.pollIntervalInSec == 0 {
-		a.poll()
+	defer pollTicker.Stop()
+	defer reportTicker.Stop()
+
+	for {
+		select {
+		case <-pollTicker.C:
+			a.poll()
+		case <-reportTicker.C:
+			a.report()
+		}
 	}
-	if a.uptime != 0 && a.uptime%a.reportIntervalInSec == 0 {
-		a.report()
-	}
-	a.uptime++
 }

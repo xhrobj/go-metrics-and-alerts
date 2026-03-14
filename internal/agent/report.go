@@ -14,7 +14,7 @@ import (
 func (a *Agent) report() {
 	gauges, _ := a.repo.Snapshot()
 
-	log.Printf("%d >>> report\n", a.uptime)
+	log.Printf(">>> report\n")
 
 	for name, value := range gauges {
 		err := a.sendGauge(name, value)

@@ -7,7 +7,7 @@ import (
 )
 
 func (a *Agent) poll() {
-	log.Printf("%d poll (%d)", a.uptime, a.pollSinceReport)
+	log.Printf("poll (%d)", a.pollSinceReport)
 
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
