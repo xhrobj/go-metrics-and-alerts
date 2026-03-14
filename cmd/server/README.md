@@ -16,7 +16,7 @@
 - флаг `-i` или env `STORE_INTERVAL` —> интервал сохранения метрик на диск в секундах (по умолчанию `300`)
 - флаг `-f` или env `FILE_STORAGE_PATH` —> путь к файлу хранения метрик (по умолчанию `metrics-db.json`)
 - флаг `-r` или env `RESTORE` —> загружать метрики из файла при старте (по умолчанию `false`)
-- флаг `-d` или env `DATABASE_DSN` —> строка подключения к базе данных PostgreSQL (по умолчанию `postgres://metrics:password@localhost:5432/metricsdb`)
+- флаг `-d` или env `DATABASE_DSN` —> строка подключения к базе данных PostgreSQL (по умолчанию ``)
 
 ## Пример запуска
 
