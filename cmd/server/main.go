@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -79,6 +80,8 @@ func run() error {
 				}
 			}
 		}()
+	} else {
+		return fmt.Errorf("store interval in seconds must be >= 0, got %d", cfg.StoreIntervalInSec)
 	}
 
 	h := handler.New(svc, db)
