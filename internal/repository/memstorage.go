@@ -40,6 +40,7 @@ func (m *MemStorage) UpdateCounter(metricName string, delta int64) error {
 }
 
 // GetGauge возвращает значение gauge-метрики.
+// Если метрика не найдена, возвращается ErrMetricNotFound.
 func (m *MemStorage) GetGauge(metricName string) (float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -53,6 +54,7 @@ func (m *MemStorage) GetGauge(metricName string) (float64, error) {
 }
 
 // GetCounter возвращает значение counter-метрики.
+// Если метрика не найдена, возвращается ErrMetricNotFound.
 func (m *MemStorage) GetCounter(metricName string) (int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -65,7 +67,8 @@ func (m *MemStorage) GetCounter(metricName string) (int64, error) {
 	return total, nil
 }
 
-// Snapshot возвращает копию всех метрик.
+// Snapshot возвращает снимок (копию) всех метрик.
+// Результат разделяется на две map: gauges и counters.
 func (m *MemStorage) Snapshot() (map[string]float64, map[string]int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
