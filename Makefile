@@ -2,7 +2,7 @@
 	build build-server build-agent \
 	clean \
 	test \
-	postgres-up postgres-start postgres-stop postgres-rm \
+	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
 	run-server run-server-env \
 	run-agent run-agent-env
 
@@ -49,6 +49,9 @@ postgres-stop:
 
 postgres-rm:
 	docker rm metrics-postgres
+
+postgres-connect:
+	docker exec -it metrics-postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 
 run-server: build-server
 	./$(SERVER) -a=$(SERVER_ADDRESS_DEFAULT) -d=$(POSTGRES_DSN)

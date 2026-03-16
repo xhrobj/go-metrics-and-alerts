@@ -11,6 +11,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/migrations"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/router"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
@@ -49,6 +50,10 @@ func run() error {
 		}
 
 		lg.Debug("database connected")
+
+		if err := migrations.RunMigrations(db); err != nil {
+			return err
+		}
 	} else {
 		lg.Debug("database disabled")
 	}
