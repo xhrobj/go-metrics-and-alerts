@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
 
 // PostgresStorage реализует хранение метрик в базе данных PostgreSQL.
@@ -49,6 +51,51 @@ func (p *PostgresStorage) UpdateCounter(metricName string, delta int64) error {
 
 	if err != nil {
 		return fmt.Errorf("exec upsert counter query: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateMetrics пакетно обновляет метрики в рамках одной транзакции.
+func (p *PostgresStorage) UpdateMetrics(metrics []model.Metrics) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, metric := range metrics {
+		switch metric.MType {
+		case model.Gauge:
+			_, err = tx.Exec(
+				`INSERT INTO metrics (id, type, value)
+				 VALUES ($1, 'gauge', $2)
+				 ON CONFLICT (id, type)
+				 DO UPDATE SET value = EXCLUDED.value`,
+				metric.ID,
+				*metric.Value,
+			)
+			if err != nil {
+				return fmt.Errorf("update gauge %q: %w", metric.ID, err)
+			}
+
+		case model.Counter:
+			_, err = tx.Exec(
+				`INSERT INTO metrics (id, type, total)
+				 VALUES ($1, 'counter', $2)
+				 ON CONFLICT (id, type)
+				 DO UPDATE SET total = metrics.total + EXCLUDED.total`,
+				metric.ID,
+				*metric.Delta,
+			)
+			if err != nil {
+				return fmt.Errorf("update counter %q: %w", metric.ID, err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
 	}
 
 	return nil

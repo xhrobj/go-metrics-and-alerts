@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
@@ -12,6 +13,8 @@ import (
 type MetricsStorage interface {
 	UpdateGauge(string, float64) error
 	UpdateCounter(string, int64) error
+
+	UpdateMetrics([]model.Metrics) error
 
 	GetGauge(string) (float64, error)
 	GetCounter(string) (int64, error)
@@ -49,6 +52,19 @@ func (m *MetricsService) EnableSyncSave(syncPersistence Saver) {
 func (m *MetricsService) UpdateGauge(metricName string, value float64) error {
 	if err := m.repo.UpdateGauge(metricName, value); err != nil {
 		return fmt.Errorf("update gauge: %w", err)
+	}
+
+	if err := m.saveIfSync(); err != nil {
+		return fmt.Errorf("sync save failed: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateMetrics сохраняет набор метрик за одну операцию.
+func (m *MetricsService) UpdateMetrics(metrics []model.Metrics) error {
+	if err := m.repo.UpdateMetrics(metrics); err != nil {
+		return fmt.Errorf("update metrics: %w", err)
 	}
 
 	if err := m.saveIfSync(); err != nil {

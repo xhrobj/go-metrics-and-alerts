@@ -19,6 +19,8 @@ type Service interface {
 	UpdateGauge(string, float64) error
 	UpdateCounter(string, int64) (int64, error)
 
+	UpdateMetrics([]model.Metrics) error
+
 	GetGauge(string) (float64, error)
 	GetCounter(string) (int64, error)
 
@@ -136,7 +138,7 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, model.Metrics{
+		writeMetricJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Gauge,
 			Value: metric.Value,
@@ -149,14 +151,14 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, model.Metrics{
+		writeMetricJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Counter,
 			Delta: &total,
 		})
 
 	default:
-		// ???: добавить log.Warinig ? потому что не должно до сюда доходить никогда
+		// NOTE: защитная ветка - validateMetric уже должен был отфильтровать некорректный тип
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -190,6 +192,11 @@ func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(status)
 			return
 		}
+	}
+
+	if err := h.service.UpdateMetrics(metrics); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -261,14 +268,14 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	case model.Gauge:
 		value, err := h.service.GetGauge(metric.ID)
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, model.Metrics{
+			writeMetricJSON(w, http.StatusNotFound, model.Metrics{
 				ID:    metric.ID,
 				MType: model.Gauge,
 			})
 			return
 		}
 
-		writeJSON(w, http.StatusOK, model.Metrics{
+		writeMetricJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Gauge,
 			Value: &value,
@@ -277,14 +284,14 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	case model.Counter:
 		value, err := h.service.GetCounter(metric.ID)
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, model.Metrics{
+			writeMetricJSON(w, http.StatusNotFound, model.Metrics{
 				ID:    metric.ID,
 				MType: model.Counter,
 			})
 			return
 		}
 
-		writeJSON(w, http.StatusOK, model.Metrics{
+		writeMetricJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Counter,
 			Delta: &value,
@@ -367,8 +374,7 @@ func validateMetric(metric model.Metrics) int {
 	return http.StatusOK
 }
 
-// ???: переименовать чтобы было созвучно методу выше
-func writeJSON(w http.ResponseWriter, status int, metric model.Metrics) {
+func writeMetricJSON(w http.ResponseWriter, status int, metric model.Metrics) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(metric)

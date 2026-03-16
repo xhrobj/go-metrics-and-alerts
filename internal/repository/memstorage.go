@@ -2,6 +2,8 @@ package repository
 
 import (
 	"sync"
+
+	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
 
 // MemStorage хранит метрики в памяти.
@@ -35,6 +37,23 @@ func (m *MemStorage) UpdateCounter(metricName string, delta int64) error {
 	defer m.mu.Unlock()
 
 	m.counters[metricName] += delta
+
+	return nil
+}
+
+// UpdateMetrics пакетно обновляет метрики под одной блокировкой.
+func (m *MemStorage) UpdateMetrics(metrics []model.Metrics) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, metric := range metrics {
+		switch metric.MType {
+		case model.Gauge:
+			m.gauges[metric.ID] = *metric.Value
+		case model.Counter:
+			m.counters[metric.ID] += *metric.Delta
+		}
+	}
 
 	return nil
 }

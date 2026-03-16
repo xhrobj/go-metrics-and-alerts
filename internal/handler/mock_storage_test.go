@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
@@ -24,6 +25,18 @@ func (m *mockServerStorage) UpdateGauge(name string, value float64) error {
 
 func (m *mockServerStorage) UpdateCounter(name string, delta int64) error {
 	m.counters[name] += delta
+	return nil
+}
+
+func (m *mockServerStorage) UpdateMetrics(metrics []model.Metrics) error {
+	for _, metric := range metrics {
+		switch metric.MType {
+		case model.Gauge:
+			m.gauges[metric.ID] = *metric.Value
+		case model.Counter:
+			m.counters[metric.ID] += *metric.Delta
+		}
+	}
 	return nil
 }
 
