@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
@@ -23,6 +26,8 @@ func testRouter(t *testing.T, h *handler.Handler) http.Handler {
 
 	r.Post("/update", h.UpdateJSON)
 	r.Post("/update/{type}/{name}/{value}", h.Update)
+
+	r.Post("/updates", h.UpdatesJSON)
 
 	r.Get("/value/{type}/{name}", h.Value)
 	r.Post("/value", h.ValueJSON)
@@ -39,7 +44,7 @@ func TestHandler_Update_Gauge_OK(t *testing.T) {
 	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
-	rq := httptest.NewRequest(http.MethodPost, "/update/gauge/Alloc/5.42", nil)
+	rq := httptest.NewRequest(http.MethodPost, "/update/gauge/Alloc/5.11", nil)
 	rq.Header.Set("Content-Type", "text/plain")
 	rr := httptest.NewRecorder()
 
@@ -49,7 +54,7 @@ func TestHandler_Update_Gauge_OK(t *testing.T) {
 		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
 	}
 
-	expected := 5.42
+	expected := 5.11
 	if got := repo.gauges["Alloc"]; got != expected {
 		t.Fatalf("expected %v, got %v", expected, got)
 	}
@@ -70,7 +75,7 @@ func TestHandler_UpdateJSON_Gauge_OK(t *testing.T) {
 	body := `{
 		"id": "Alloc",
 		"type": "gauge",
-		"value": 5.42
+		"value": 5.11
 	}`
 
 	rq := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(body))
@@ -83,7 +88,7 @@ func TestHandler_UpdateJSON_Gauge_OK(t *testing.T) {
 		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
 	}
 
-	expected := 5.42
+	expected := 5.11
 	if got := repo.gauges["Alloc"]; got != expected {
 		t.Fatalf("expected %v, got %v", expected, got)
 	}
@@ -386,6 +391,123 @@ func TestHandler_UpdateJSON_StatusCodes(t *testing.T) {
 	}
 }
 
+func TestHandler_UpdatesJSON_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv, nil)
+	r := testRouter(t, h)
+
+	value := 5.11
+	delta := int64(42)
+
+	metrics := []model.Metrics{
+		{
+			ID:    "Alloc",
+			MType: model.Gauge,
+			Value: &value,
+		},
+		{
+			ID:    "PollCount",
+			MType: model.Counter,
+			Delta: &delta,
+		},
+	}
+
+	body, err := json.Marshal(metrics)
+	require.NoError(t, err)
+
+	rq := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(body))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	gotGauge, err := srv.GetGauge("Alloc")
+	require.NoError(t, err)
+	assert.Equal(t, value, gotGauge)
+
+	gotCounter, err := srv.GetCounter("PollCount")
+	require.NoError(t, err)
+	assert.Equal(t, delta, gotCounter)
+}
+
+func TestHandler_UpdatesJSON_BadJSON(t *testing.T) {
+	repo := newMockServerStorage()
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv, nil)
+	r := testRouter(t, h)
+
+	rq := httptest.NewRequest(http.MethodPost, "/updates", strings.NewReader(`{"broken":`))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestHandler_UpdatesJSON_InvalidMetric(t *testing.T) {
+	repo := newMockServerStorage()
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv, nil)
+	r := testRouter(t, h)
+
+	metrics := []model.Metrics{
+		{
+			ID:    "Alloc",
+			MType: model.Gauge,
+		},
+	}
+
+	body, err := json.Marshal(metrics)
+	require.NoError(t, err)
+
+	rq := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(body))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestHandler_UpdatesJSON_InvalidMetric_DoesNotApplyBatch(t *testing.T) {
+	repo := newMockServerStorage()
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv, nil)
+	r := testRouter(t, h)
+
+	value := 5.11
+
+	metrics := []model.Metrics{
+		{
+			ID:    "Alloc",
+			MType: model.Gauge,
+			Value: &value,
+		},
+		{
+			ID:    "BrokenCounter",
+			MType: model.Counter,
+		},
+	}
+
+	body, err := json.Marshal(metrics)
+	require.NoError(t, err)
+
+	rq := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(body))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, rq)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+
+	_, err = srv.GetGauge("Alloc")
+	assert.Error(t, err)
+}
+
 func TestHandler_Value(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -399,10 +521,10 @@ func TestHandler_Value(t *testing.T) {
 			name: "gauge ok",
 			path: "/value/gauge/Alloc",
 			seed: func(repo *mockServerStorage) {
-				repo.gauges["Alloc"] = 5.42
+				repo.gauges["Alloc"] = 5.11
 			},
 			wantStatus: http.StatusOK,
-			wantBody:   "5.42",
+			wantBody:   "5.11",
 			wantCT:     "text/plain; charset=utf-8",
 		},
 		{
@@ -476,11 +598,11 @@ func TestHandler_ValueJSON(t *testing.T) {
 				"type": "gauge"
 			}`,
 			seed: func(repo *mockServerStorage) {
-				repo.gauges["Alloc"] = 5.42
+				repo.gauges["Alloc"] = 5.11
 			},
 			wantStatus: http.StatusOK,
 			wantCT:     "application/json",
-			wantValue:  5.42,
+			wantValue:  5.11,
 			wantDelta:  0,
 		},
 		{
@@ -576,7 +698,7 @@ func TestHandler_ValueJSON(t *testing.T) {
 
 func TestHandler_Index_OK(t *testing.T) {
 	repo := newMockServerStorage()
-	repo.gauges["Alloc"] = 5.42
+	repo.gauges["Alloc"] = 5.11
 	repo.counters["PollCount"] = 42
 
 	srv := service.NewMetricsService(repo)
@@ -599,7 +721,7 @@ func TestHandler_Index_OK(t *testing.T) {
 
 	body := rr.Body.String()
 
-	if !(strings.Contains(body, "Alloc") && strings.Contains(body, "5.42")) {
+	if !(strings.Contains(body, "Alloc") && strings.Contains(body, "5.11")) {
 		t.Errorf("response body does not contain gauge metric: %s", body)
 	}
 

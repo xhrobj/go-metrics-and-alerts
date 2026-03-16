@@ -36,7 +36,7 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	repo.UpdateGauge("Alloc", 5.42)
+	repo.UpdateGauge("Alloc", 5.11)
 	repo.UpdateCounter("PollCount", 1)
 
 	a, _ := New(repo, server.URL, 2, 10)
@@ -77,7 +77,7 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	repo.UpdateGauge("Alloc", 5.42)
+	repo.UpdateGauge("Alloc", 5.11)
 
 	a, _ := New(repo, server.URL, 2, 10)
 	a.pollSinceReport = 3
@@ -97,8 +97,8 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 			if m.Value == nil {
 				t.Fatal("expected gauge value to be set")
 			}
-			if *m.Value != 5.42 {
-				t.Fatalf("expected gauge value 5.42, got %v", *m.Value)
+			if *m.Value != 5.11 {
+				t.Fatalf("expected gauge value 5.11, got %v", *m.Value)
 			}
 			if m.Delta != nil {
 				t.Fatal("expected gauge delta to be nil")
