@@ -8,21 +8,28 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+// AgentStorage описывает хранилище метрик, используемое Агентом.
 type AgentStorage interface {
 	UpdateGauge(string, float64) error
 	UpdateCounter(string, int64) error
 	Snapshot() (map[string]float64, map[string]int64, error)
 }
 
+// Agent собирает runtime-метрики и отправляет их на сервер по HTTP.
 type Agent struct {
 	repo                AgentStorage
 	baseURL             string
 	pollIntervalInSec   int
 	reportIntervalInSec int
 	client              *resty.Client
-	pollSinceReport     int
+
+	// pollSinceReport — количество вызовов poll() с момента последней отправки
+	// отчёта. Используется для формирования метрики PollCount.
+	pollSinceReport int
 }
 
+// New создаёт нового агента с указанным хранилищем, адресом сервера
+// и интервалами опроса и отправки метрик.
 func New(
 	repo AgentStorage,
 	baseURL string,
@@ -49,6 +56,7 @@ func New(
 	}, nil
 }
 
+// Run запускает цикл работы агента: периодический сбор и отправку метрик.
 func (a *Agent) Run() {
 	pollTicker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
 	reportTicker := time.NewTicker(time.Duration(a.reportIntervalInSec) * time.Second)

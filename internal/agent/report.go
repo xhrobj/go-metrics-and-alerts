@@ -12,74 +12,76 @@ import (
 )
 
 func (a *Agent) report() {
-	gauges, _, err := a.repo.Snapshot()
-	if err != nil {
-		logError(err)
+	if a.pollSinceReport == 0 {
 		return
 	}
 
-	log.Printf(">>> report\n")
-
-	for name, value := range gauges {
-		err := a.sendGauge(name, value)
-		if err != nil {
-			logError(err)
-		}
+	metrics, err := a.buildMetricsBatch()
+	if err != nil {
+		return
 	}
 
-	err = a.sendCounter("PollCount", int64(a.pollSinceReport))
-	if err != nil {
-		logError(err)
+	if len(metrics) == 0 {
+		return
+	}
+
+	if err := a.sendMetrics(metrics); err != nil {
 		return
 	}
 
 	a.pollSinceReport = 0
 }
 
-func (a *Agent) sendGauge(name string, value float64) error {
-	metric := model.Metrics{
-		ID:    name,
-		MType: model.Gauge,
-		Value: &value,
+func (a *Agent) buildMetricsBatch() ([]model.Metrics, error) {
+	gauges, _, err := a.repo.Snapshot()
+	if err != nil {
+		return nil, fmt.Errorf("snapshot metrics: %w", err)
 	}
-	return a.sendMetric(metric)
-}
 
-func (a *Agent) sendCounter(name string, delta int64) error {
-	metric := model.Metrics{
-		ID:    name,
+	metrics := make([]model.Metrics, 0, len(gauges)+1)
+
+	for name, value := range gauges {
+		v := value
+		metrics = append(metrics, model.Metrics{
+			ID:    name,
+			MType: model.Gauge,
+			Value: &v,
+		})
+	}
+
+	delta := int64(a.pollSinceReport)
+	metrics = append(metrics, model.Metrics{
+		ID:    "PollCount",
 		MType: model.Counter,
 		Delta: &delta,
-	}
-	return a.sendMetric(metric)
+	})
+
+	return metrics, nil
 }
 
-func (a *Agent) sendMetric(metric model.Metrics) error {
-	url := a.baseURL + "/update"
-	log.Printf("* %s", url)
-
-	body, err := json.Marshal(metric)
+func (a *Agent) sendMetrics(metrics []model.Metrics) error {
+	body, err := json.Marshal(metrics)
 	if err != nil {
-		return fmt.Errorf("failed to marshal metric: %w", err)
+		return fmt.Errorf("marshal metrics batch: %w", err)
 	}
 
 	compressedBody, err := gzipCompress(body)
 	if err != nil {
-		return fmt.Errorf("failed to compress metric: %w", err)
+		return fmt.Errorf("gzip compress metrics batch: %w", err)
 	}
 
 	resp, err := a.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetBody(compressedBody).
-		Post(url)
+		Post(a.baseURL + "/updates")
 
 	if err != nil {
-		return fmt.Errorf("failed to send metric: %w", err)
+		return fmt.Errorf("send metrics batch: %w", err)
 	}
 
 	if resp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("unexpected status: %s", resp.Status())
+		return fmt.Errorf("send metrics batch: unexpected status code: %d", resp.StatusCode())
 	}
 
 	return nil
