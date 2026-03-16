@@ -58,35 +58,46 @@ func run() error {
 		lg.Debug("database disabled")
 	}
 
-	repo := repository.NewMemStorage()
-	store := repository.NewFileStore(cfg.FileStoragePath)
+	var repo service.MetricsStorage
+	var memRepo *repository.MemStorage
 
-	if cfg.Restore {
-		if err := store.Load(repo); err != nil {
-			return err
-		}
+	if db != nil {
+		repo = repository.NewPostgresStorage(db)
+	} else {
+		memRepo = repository.NewMemStorage()
+		repo = memRepo
 	}
 
 	svc := service.NewMetricsService(repo)
 
-	if cfg.StoreIntervalInSec == 0 {
-		svc.EnableSyncSave(store)
-	} else if cfg.StoreIntervalInSec > 0 {
-		go func() {
-			ticker := time.NewTicker(time.Duration(cfg.StoreIntervalInSec) * time.Second)
-			defer ticker.Stop()
+	if memRepo != nil {
+		store := repository.NewFileStore(cfg.FileStoragePath)
 
-			for range ticker.C {
-				if err := store.Save(repo); err != nil {
-					lg.Error("failed to save metrics to file",
-						zap.String("path", cfg.FileStoragePath),
-						zap.Error(err),
-					)
-				}
+		if cfg.Restore {
+			if err := store.Load(memRepo); err != nil {
+				return err
 			}
-		}()
-	} else {
-		return fmt.Errorf("store interval in seconds must be >= 0, got %d", cfg.StoreIntervalInSec)
+		}
+
+		if cfg.StoreIntervalInSec == 0 {
+			svc.EnableSyncSave(store)
+		} else if cfg.StoreIntervalInSec > 0 {
+			go func() {
+				ticker := time.NewTicker(time.Duration(cfg.StoreIntervalInSec) * time.Second)
+				defer ticker.Stop()
+
+				for range ticker.C {
+					if err := store.Save(memRepo); err != nil {
+						lg.Error("failed to save metrics to file",
+							zap.String("path", cfg.FileStoragePath),
+							zap.Error(err),
+						)
+					}
+				}
+			}()
+		} else {
+			return fmt.Errorf("store interval in seconds must be >= 0, got %d", cfg.StoreIntervalInSec)
+		}
 	}
 
 	h := handler.New(svc, db)

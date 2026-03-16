@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS metrics (
+CREATE TABLE metrics (
     id TEXT NOT NULL,
     type TEXT NOT NULL,
     total BIGINT,

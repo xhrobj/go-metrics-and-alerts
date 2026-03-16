@@ -42,7 +42,7 @@ func (p *PostgresStorage) UpdateCounter(metricName string, delta int64) error {
 		`INSERT INTO metrics (id, type, total)
 		 VALUES ($1, 'counter', $2)
 		 ON CONFLICT (id, type)
-		 DO UPDATE SET total = metrics.total + EXCLUDED.delta`,
+		 DO UPDATE SET total = metrics.total + EXCLUDED.total`,
 		metricName,
 		delta,
 	)

@@ -3,6 +3,7 @@ package migrations
 import (
 	"database/sql"
 	"fmt"
+	"os"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -15,8 +16,15 @@ func RunMigrations(db *sql.DB) error {
 		return fmt.Errorf("create migration driver: %w", err)
 	}
 
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working dir: %w", err)
+	}
+
+	path := fmt.Sprintf("file://%s/migrations", wd)
+
 	m, err := migrate.NewWithDatabaseInstance(
-		"file://migrations",
+		path,
 		"postgres",
 		driver,
 	)
