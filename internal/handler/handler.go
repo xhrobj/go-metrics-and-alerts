@@ -123,20 +123,14 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// missing name -> 404
-	if metric.ID == "" {
-		w.WriteHeader(http.StatusNotFound)
+	status := validateMetric(metric)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
 		return
 	}
 
-	// invalid type or value -> 400
 	switch metric.MType {
 	case model.Gauge:
-		if metric.Value == nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		if err := h.service.UpdateGauge(metric.ID, *metric.Value); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -149,11 +143,6 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case model.Counter:
-		if metric.Delta == nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		total, err := h.service.UpdateCounter(metric.ID, *metric.Delta)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -167,9 +156,43 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		})
 
 	default:
+		// ???: добавить log.Warinig ? потому что не должно до сюда доходить никогда
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+}
+
+// UpdatesJSON принимает набор метрик на хранение.
+// Данные метрик передаются в теле POST-запроса в формате JSON.
+func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
+	// method must be POST
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// invalid Content-Type
+	ct := r.Header.Get("Content-Type")
+	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), "application/json") {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	var metrics []model.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&metrics); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	for _, metric := range metrics {
+		status := validateMetric(metric)
+		if status != http.StatusOK {
+			w.WriteHeader(status)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // Value возвращает текущее значение метрики в текстовом виде.
@@ -319,6 +342,32 @@ func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func validateMetric(metric model.Metrics) int {
+	// missing name -> 404
+	// NOTE: Требование из Инкремента 1:
+	// "При попытке передать запрос без имени метрики возвращать http.StatusNotFound"
+	if metric.ID == "" {
+		return http.StatusNotFound
+	}
+
+	// invalid type or value -> 400
+	switch metric.MType {
+	case model.Gauge:
+		if metric.Value == nil {
+			return http.StatusBadRequest
+		}
+	case model.Counter:
+		if metric.Delta == nil {
+			return http.StatusBadRequest
+		}
+	default:
+		return http.StatusBadRequest
+	}
+
+	return http.StatusOK
+}
+
+// ???: переименовать чтобы было созвучно методу выше
 func writeJSON(w http.ResponseWriter, status int, metric model.Metrics) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

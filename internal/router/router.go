@@ -22,6 +22,7 @@ func New(h *handler.Handler, log *zap.Logger) http.Handler {
 	r.Get("/ping", h.Ping)
 
 	r.HandleFunc("/update/{type}/{name}/{value}", h.Update)
+	r.Post("/updates", h.UpdatesJSON)
 	r.Post("/update", h.UpdateJSON)
 
 	r.Get("/value/{type}/{name}", h.Value)
