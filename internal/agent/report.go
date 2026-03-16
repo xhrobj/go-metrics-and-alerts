@@ -12,7 +12,11 @@ import (
 )
 
 func (a *Agent) report() {
-	gauges, _ := a.repo.Snapshot()
+	gauges, _, err := a.repo.Snapshot()
+	if err != nil {
+		logError(err)
+		return
+	}
 
 	log.Printf(">>> report\n")
 
@@ -23,7 +27,7 @@ func (a *Agent) report() {
 		}
 	}
 
-	err := a.sendCounter("PollCount", int64(a.pollSinceReport))
+	err = a.sendCounter("PollCount", int64(a.pollSinceReport))
 	if err != nil {
 		logError(err)
 		return

@@ -22,7 +22,7 @@ type Service interface {
 	GetGauge(string) (float64, error)
 	GetCounter(string) (int64, error)
 
-	Snapshot() (map[string]float64, map[string]int64)
+	Snapshot() (map[string]float64, map[string]int64, error)
 }
 
 // Handler обрабатывает HTTP-запросы, связанные с метриками.
@@ -277,7 +277,11 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 // Index возвращает HTML-страницу со списком всех известных метрик
 // и их текущих значений.
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
-	gauges, counters := h.service.Snapshot()
+	gauges, counters, err := h.service.Snapshot()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	var out strings.Builder
 	out.WriteString("<!doctype html><html><head><meta charset=\"utf-8\">")

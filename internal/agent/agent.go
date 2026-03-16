@@ -9,9 +9,9 @@ import (
 )
 
 type AgentStorage interface {
-	UpdateGauge(string, float64)
-	UpdateCounter(string, int64)
-	Snapshot() (map[string]float64, map[string]int64)
+	UpdateGauge(string, float64) error
+	UpdateCounter(string, int64) error
+	Snapshot() (map[string]float64, map[string]int64, error)
 }
 
 type Agent struct {

@@ -10,7 +10,7 @@ import (
 
 // Snapshotter описывает хранилище, из которого можно получить снимок метрик.
 type Snapshotter interface {
-	Snapshot() (map[string]float64, map[string]int64)
+	Snapshot() (map[string]float64, map[string]int64, error)
 }
 
 // Restorer описывает хранилище, в которое можно записать восстановленные метрики.
@@ -31,7 +31,10 @@ func NewFileStore(path string) *FileStore {
 
 // Save сохраняет все текущие метрики в файл в формате JSON.
 func (f *FileStore) Save(repo Snapshotter) error {
-	gauges, counters := repo.Snapshot()
+	gauges, counters, err := repo.Snapshot()
+	if err != nil {
+		return err
+	}
 
 	metrics := make([]model.Metrics, 0, len(gauges)+len(counters))
 
