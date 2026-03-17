@@ -7,7 +7,7 @@ package handler_test
 //   POST /update/{type}/{name}/{value}
 //   GET  /value/{type}/{name}
 //
-// В текущей реализации агент работает только с JSON API.
+// В текущей реализации Агент работает только с JSON API.
 
 import (
 	"net/http"
