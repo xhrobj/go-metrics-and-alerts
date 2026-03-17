@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"time"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
@@ -70,21 +73,38 @@ func (a *Agent) sendMetrics(metrics []model.Metrics) error {
 		return fmt.Errorf("gzip compress metrics batch: %w", err)
 	}
 
-	resp, err := a.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(compressedBody).
-		Post(a.baseURL + "/updates")
-
-	if err != nil {
-		return fmt.Errorf("send metrics batch: %w", err)
+	retryDelays := []time.Duration{
+		time.Second * 1,
+		time.Second * 3,
+		time.Second * 5,
 	}
 
-	if resp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("send metrics batch: unexpected status code: %d", resp.StatusCode())
+	var lastErr error
+
+	for attempt := 0; attempt <= len(retryDelays); attempt++ {
+		resp, err := a.client.R().
+			SetHeader("Content-Type", "application/json").
+			SetHeader("Content-Encoding", "gzip").
+			SetBody(compressedBody).
+			Post(a.baseURL + "/updates")
+
+		if err == nil {
+			if resp.StatusCode() != http.StatusOK {
+				return fmt.Errorf("send metrics batch: unexpected status code: %d", resp.StatusCode())
+			}
+			return nil
+		}
+
+		lastErr = fmt.Errorf("send metrics batch: %w", err)
+
+		if !isRetriableAgentError(err) || attempt == len(retryDelays) {
+			return lastErr
+		}
+
+		time.Sleep(retryDelays[attempt])
 	}
 
-	return nil
+	return lastErr
 }
 
 func gzipCompress(data []byte) ([]byte, error) {
@@ -110,4 +130,9 @@ func logError(err error) {
 		return
 	}
 	log.Printf("(×﹏×) %v", err)
+}
+
+func isRetriableAgentError(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr)
 }
