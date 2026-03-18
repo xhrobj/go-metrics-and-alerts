@@ -22,8 +22,8 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 			t.Fatalf("expected POST, got %s", r.Method)
 		}
 
-		if r.URL.Path != "/update" {
-			t.Fatalf("expected path /update, got %q", r.URL.Path)
+		if r.URL.Path != "/updates" {
+			t.Fatalf("expected path /updates, got %q", r.URL.Path)
 		}
 
 		ct := r.Header.Get("Content-Type")
@@ -31,29 +31,34 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 			t.Fatalf("expected Content-Type application/json, got %q", ct)
 		}
 
+		ce := r.Header.Get("Content-Encoding")
+		if ce != "gzip" {
+			t.Fatalf("expected Content-Encoding gzip, got %q", ce)
+		}
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	repo.UpdateGauge("Alloc", 5.42)
-	repo.UpdateCounter("PollCount", 1)
+	repo.UpdateGauge("Alloc", 5.11)
 
 	a, _ := New(repo, server.URL, 2, 10)
+	a.pollSinceReport = 1
 	a.report()
 
-	if requests != 2 {
-		t.Fatalf("expected 2 requests, got %d", requests)
+	if requests != 1 {
+		t.Fatalf("expected 1 requests, got %d", requests)
 	}
 }
 
-// report() отправляет корректные JSON-метрики на /update
+// report() отправляет корректные JSON-метрики на /updates
 func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	var metrics []model.Metrics
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/update" {
-			t.Fatalf("expected path /update, got %q", r.URL.Path)
+		if r.URL.Path != "/updates" {
+			t.Fatalf("expected path /updates, got %q", r.URL.Path)
 		}
 
 		if got := r.Header.Get("Content-Encoding"); got != "gzip" {
@@ -66,18 +71,16 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 		}
 		defer zr.Close()
 
-		var m model.Metrics
-		if err := json.NewDecoder(zr).Decode(&m); err != nil {
+		if err := json.NewDecoder(zr).Decode(&metrics); err != nil {
 			t.Fatalf("failed to decode request body: %v", err)
 		}
 
-		metrics = append(metrics, m)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	repo.UpdateGauge("Alloc", 5.42)
+	repo.UpdateGauge("Alloc", 5.11)
 
 	a, _ := New(repo, server.URL, 2, 10)
 	a.pollSinceReport = 3
@@ -97,8 +100,8 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 			if m.Value == nil {
 				t.Fatal("expected gauge value to be set")
 			}
-			if *m.Value != 5.42 {
-				t.Fatalf("expected gauge value 5.42, got %v", *m.Value)
+			if *m.Value != 5.11 {
+				t.Fatalf("expected gauge value 5.11, got %v", *m.Value)
 			}
 			if m.Delta != nil {
 				t.Fatal("expected gauge delta to be nil")

@@ -20,7 +20,7 @@ import (
 func TestGzipMiddleware(t *testing.T) {
 	repo := repository.NewMemStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
+	h := handler.New(srv, nil)
 	log := zap.NewNop()
 
 	r := router.New(h, log)
@@ -82,7 +82,24 @@ func TestGzipMiddleware(t *testing.T) {
 	})
 
 	t.Run("server does not gzip non json/html responses", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, ts.URL+"/ping", nil)
+		updateReq, err := http.NewRequest(
+			http.MethodPost,
+			ts.URL+"/update/counter/test_metric/42",
+			nil,
+		)
+		require.NoError(t, err)
+
+		updateResp, err := http.DefaultClient.Do(updateReq)
+		require.NoError(t, err)
+		defer updateResp.Body.Close()
+
+		require.Equal(t, http.StatusOK, updateResp.StatusCode)
+
+		req, err := http.NewRequest(
+			http.MethodGet,
+			ts.URL+"/value/counter/test_metric",
+			nil,
+		)
 		require.NoError(t, err)
 
 		req.Header.Set("Accept-Encoding", "gzip")
@@ -96,9 +113,11 @@ func TestGzipMiddleware(t *testing.T) {
 		// gzip не должен включаться
 		require.NotEqual(t, "gzip", resp.Header.Get("Content-Encoding"))
 
+		require.Equal(t, "text/plain; charset=utf-8", resp.Header.Get("Content-Type"))
+
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		require.Equal(t, "pong", string(body))
+		require.Equal(t, "42", string(body))
 	})
 }

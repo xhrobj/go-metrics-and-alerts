@@ -13,7 +13,7 @@ func TestAgent_Poll_UpdatesMetrics(t *testing.T) {
 
 	a.poll()
 
-	gauges, _ := repo.Snapshot()
+	gauges, _, _ := repo.Snapshot()
 
 	// RandomValue должен существовать
 	if _, ok := gauges["RandomValue"]; !ok {

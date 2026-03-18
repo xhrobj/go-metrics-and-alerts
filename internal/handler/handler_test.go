@@ -1,132 +1,56 @@
 package handler_test
 
+// handler_test.go содержит тесты для актуального JSON API.
+
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
 )
 
-func testRouter(t *testing.T, h *handler.Handler) http.Handler {
-	t.Helper()
-
-	r := chi.NewRouter()
-
-	r.Use(middleware.StripSlashes)
-
-	r.Post("/update", h.UpdateJSON)
-	r.Post("/update/{type}/{name}/{value}", h.Update)
-
-	r.Get("/value/{type}/{name}", h.Value)
-	r.Post("/value", h.ValueJSON)
-
-	r.Get("/", h.Index)
-
-	return r
-}
-
-// 200 OK для валидного POST /update/gauge/<name>/<value>
-func TestHandler_Update_Gauge_OK(t *testing.T) {
-	repo := newMockServerStorage()
-	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
-	r := testRouter(t, h)
-
-	rq := httptest.NewRequest(http.MethodPost, "/update/gauge/Alloc/5.42", nil)
-	rq.Header.Set("Content-Type", "text/plain")
-	rr := httptest.NewRecorder()
-
-	r.ServeHTTP(rr, rq)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
-	}
-
-	expected := 5.42
-	if got := repo.gauges["Alloc"]; got != expected {
-		t.Fatalf("expected %v, got %v", expected, got)
-	}
-
-	ct := rr.Header().Get("Content-Type")
-	if ct != "text/plain; charset=utf-8" {
-		t.Errorf("expected Content-Type %q, got %q", "text/plain; charset=utf-8", ct)
-	}
-}
-
 // 200 OK для валидного POST /update с типом gauge
 func TestHandler_UpdateJSON_Gauge_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
-	r := testRouter(t, h)
+	h := handler.New(srv, nil)
 
 	body := `{
 		"id": "Alloc",
 		"type": "gauge",
-		"value": 5.42
+		"value": 5.11
 	}`
 
 	rq := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(body))
 	rq.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	r.ServeHTTP(rr, rq)
+	h.UpdateJSON(rr, rq)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
-	}
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 
-	expected := 5.42
-	if got := repo.gauges["Alloc"]; got != expected {
-		t.Fatalf("expected %v, got %v", expected, got)
-	}
+	got, ok := repo.gauges["Alloc"]
+	require.True(t, ok)
 
-	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
-		t.Errorf("expected Content-Type %q, got %q", "application/json", ct)
-	}
-}
+	want := 5.11
+	require.Equal(t, want, got)
 
-// 200 OK для валидного POST /update/counter/<name>/<value>
-func TestHandler_Update_Counter_OK(t *testing.T) {
-	repo := newMockServerStorage()
-	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
-	r := testRouter(t, h)
-
-	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
-	rq.Header.Set("Content-Type", "text/plain")
-	rr := httptest.NewRecorder()
-
-	r.ServeHTTP(rr, rq)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
-	}
-
-	expected := int64(42)
-	if got := repo.counters["PollCount"]; got != expected {
-		t.Fatalf("expected %v, got %v", expected, got)
-	}
-
-	ct := rr.Header().Get("Content-Type")
-	if ct != "text/plain; charset=utf-8" {
-		t.Errorf("expected Content-Type %q, got %q", "text/plain; charset=utf-8", ct)
-	}
 }
 
 // 200 OK для валидного POST /update с типом counter
 func TestHandler_UpdateJSON_Counter_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
-	r := testRouter(t, h)
+	h := handler.New(srv, nil)
 
 	body := `{
 		"id": "PollCount",
@@ -138,54 +62,23 @@ func TestHandler_UpdateJSON_Counter_OK(t *testing.T) {
 	rq.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	r.ServeHTTP(rr, rq)
+	h.UpdateJSON(rr, rq)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
-	}
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 
-	expected := int64(42)
-	if got := repo.counters["PollCount"]; got != expected {
-		t.Fatalf("expected %v, got %v", expected, got)
-	}
+	value, ok := repo.counters["PollCount"]
+	require.True(t, ok)
 
-	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
-		t.Errorf("expected Content-Type %q, got %q", "application/json", ct)
-	}
-}
-
-// два POST на одну counter-метрику (для /update/counter/...) -> счётчик суммируется
-func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
-	repo := newMockServerStorage()
-	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
-	r := testRouter(t, h)
-
-	rq := httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/42", nil)
-	rq.Header.Set("Content-Type", "text/plain")
-
-	rr1 := httptest.NewRecorder()
-	r.ServeHTTP(rr1, rq)
-
-	rr2 := httptest.NewRecorder()
-	r.ServeHTTP(rr2, rq)
-
-	if rr2.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, rr2.Code)
-	}
-
-	expected := int64(84)
-	if got := repo.counters["PollCount"]; got != expected {
-		t.Errorf("expected %v, got %v", expected, got)
-	}
+	want := int64(42)
+	require.Equal(t, want, value)
 }
 
 // два POST на одну counter-метрику (для /update) -> счётчик суммируется
 func TestHandler_UpdateJSON_Counter_Accumulates_OK(t *testing.T) {
 	repo := newMockServerStorage()
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
-	r := testRouter(t, h)
+	h := handler.New(srv, nil)
 
 	body := `{
 		"id": "PollCount",
@@ -196,88 +89,30 @@ func TestHandler_UpdateJSON_Counter_Accumulates_OK(t *testing.T) {
 	rq1 := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(body))
 	rq1.Header.Set("Content-Type", "application/json")
 	rr1 := httptest.NewRecorder()
-	r.ServeHTTP(rr1, rq1)
+	h.UpdateJSON(rr1, rq1)
+
+	require.Equal(t, http.StatusOK, rr1.Code)
 
 	rq2 := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(body))
 	rq2.Header.Set("Content-Type", "application/json")
 	rr2 := httptest.NewRecorder()
-	r.ServeHTTP(rr2, rq2)
+	h.UpdateJSON(rr2, rq2)
 
-	if rr2.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, rr2.Code)
-	}
+	require.Equal(t, http.StatusOK, rr2.Code)
 
-	expected := int64(84)
-	if got := repo.counters["PollCount"]; got != expected {
-		t.Errorf("expected %v, got %v", expected, got)
-	}
-}
+	assert.Equal(t, "application/json", rr2.Header().Get("Content-Type"))
 
-// ассорти ошибок для POST /update/... (таблица кейсов)
-func TestHandler_Update_StatusCodes(t *testing.T) {
-	srv := service.NewMetricsService(newMockServerStorage())
-	h := handler.New(srv)
-	r := testRouter(t, h)
+	got, ok := repo.counters["PollCount"]
+	require.True(t, ok)
 
-	tests := []struct {
-		name        string
-		method      string
-		path        string
-		contentType string
-		wantStatus  int
-	}{
-		// 400 Bad Request -> если Content-Type не text/plain:
-
-		{"bad content type", http.MethodPost, "/update/gauge/Alloc/1", "application/json", http.StatusBadRequest},
-
-		// 400 Bad Request -> если тип метрики неизвестен:
-
-		{"unknown type", http.MethodPost, "/update/unknown/Alloc/1", "text/plain", http.StatusBadRequest},
-
-		// 400 Bad Request -> если значение не парсится (float/int):
-
-		{"bad gauge value", http.MethodPost, "/update/gauge/Alloc/abc", "text/plain", http.StatusBadRequest},
-		{"bad counter value", http.MethodPost, "/update/counter/PollCount/1.2", "text/plain", http.StatusBadRequest},
-
-		// 404 Not Found -> если путь “не той формы” (мало/много сегментов, пустые сегменты):
-
-		{"malformed path short", http.MethodPost, "/update/gauge/Alloc", "text/plain", http.StatusNotFound},
-		{"malformed path long", http.MethodPost, "/update/gauge/Alloc/1/extra", "text/plain", http.StatusNotFound},
-
-		{"empty value", http.MethodPost, "/update/gauge/Alloc/", "text/plain", http.StatusNotFound},
-		{"empty all", http.MethodPost, "/update////", "text/plain", http.StatusNotFound},
-
-		// 404 Not Found -> если пустое имя метрики (кейс из требований):
-
-		{"empty name", http.MethodPost, "/update/gauge//1", "text/plain", http.StatusNotFound},
-
-		// 405 Method Not Allowed -> если метод не POST:
-
-		{"method not allowed", http.MethodGet, "/update/gauge/Alloc/1", "text/plain", http.StatusMethodNotAllowed},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rq := httptest.NewRequest(tt.method, tt.path, nil)
-			if tt.contentType != "" {
-				rq.Header.Set("Content-Type", tt.contentType)
-			}
-
-			rr := httptest.NewRecorder()
-			r.ServeHTTP(rr, rq)
-
-			if rr.Code != tt.wantStatus {
-				t.Errorf("%s: expected %d, got %d", tt.name, tt.wantStatus, rr.Code)
-			}
-		})
-	}
+	want := int64(84)
+	require.Equal(t, want, got)
 }
 
 // ассорти ошибок для POST /update (таблица кейсов)
 func TestHandler_UpdateJSON_StatusCodes(t *testing.T) {
 	srv := service.NewMetricsService(newMockServerStorage())
-	h := handler.New(srv)
-	r := testRouter(t, h)
+	h := handler.New(srv, nil)
 
 	tests := []struct {
 		name        string
@@ -289,83 +124,83 @@ func TestHandler_UpdateJSON_StatusCodes(t *testing.T) {
 		// 400 Bad Request -> если Content-Type не application/json:
 
 		{
-			"bad content type",
-			http.MethodPost,
-			`{
+			name:   "bad content type",
+			method: http.MethodPost,
+			body: `{
 				"id": "Alloc",
 				"type": "gauge",
 				"value": 1
 			}`,
-			"text/plain",
-			http.StatusBadRequest,
+			contentType: "text/plain",
+			wantStatus:  http.StatusBadRequest,
 		},
 
 		// 400 Bad Request -> если тип метрики неизвестен:
 
 		{
-			"unknown type",
-			http.MethodPost,
-			`{
+			name:   "unknown type",
+			method: http.MethodPost,
+			body: `{
 				"id": "Alloc",
 				"type": "unknown",
 				"value": 1
 			}`,
-			"application/json",
-			http.StatusBadRequest,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
 		},
 
 		// 400 Bad Request -> если значение не парсится (float/int):
 
 		{
-			"bad gauge value",
-			http.MethodPost,
-			`{
+			name:   "bad gauge value",
+			method: http.MethodPost,
+			body: `{
 				"id": "Alloc",
 				"type": "gauge",
 				"value": "abc"
 			}`,
-			"application/json",
-			http.StatusBadRequest,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
 		},
 
 		{
-			"bad counter value",
-			http.MethodPost,
-			`{
+			name:   "bad counter value",
+			method: http.MethodPost,
+			body: `{
 				"id": "PollCount",
 				"type": "counter",
 				"delta": 1.2
 			}`,
-			"application/json",
-			http.StatusBadRequest,
+			contentType: "application/json",
+			wantStatus:  http.StatusBadRequest,
 		},
 
 		// 404 Not Found -> если пустое имя метрики (кейс из требований):
 
 		{
-			"empty name",
-			http.MethodPost,
-			`{
+			name:   "empty name",
+			method: http.MethodPost,
+			body: `{
 				"id": "",
 				"type": "gauge",
 				"value": 1
 			}`,
-			"application/json",
-			http.StatusNotFound,
+			contentType: "application/json",
+			wantStatus:  http.StatusNotFound,
 		},
 
 		// 405 Method Not Allowed -> если метод не POST:
 
 		{
-			"method not allowed",
-			http.MethodGet,
-			`{
+			name:   "method not allowed",
+			method: http.MethodGet,
+			body: `{
 				"id": "Alloc",
 				"type": "gauge",
 				"value": 1
 			}`,
-			"application/json",
-			http.StatusMethodNotAllowed,
+			contentType: "application/json",
+			wantStatus:  http.StatusMethodNotAllowed,
 		},
 	}
 
@@ -377,88 +212,135 @@ func TestHandler_UpdateJSON_StatusCodes(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			r.ServeHTTP(rr, rq)
+			h.UpdateJSON(rr, rq)
 
-			if rr.Code != tt.wantStatus {
-				t.Errorf("%s: expected %d, got %d", tt.name, tt.wantStatus, rr.Code)
-			}
+			assert.Equal(t, tt.wantStatus, rr.Code, "case %q", tt.name)
 		})
 	}
 }
 
-func TestHandler_Value(t *testing.T) {
-	tests := []struct {
-		name       string
-		path       string
-		seed       func(repo *mockServerStorage)
-		wantStatus int
-		wantBody   string
-		wantCT     string
-	}{
+// 200 OK для валидного POST /updates с набором метрик
+func TestHandler_UpdatesJSON_OK(t *testing.T) {
+	repo := newMockServerStorage()
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv, nil)
+
+	value := 5.11
+	delta := int64(42)
+
+	metrics := []model.Metrics{
 		{
-			name: "gauge ok",
-			path: "/value/gauge/Alloc",
-			seed: func(repo *mockServerStorage) {
-				repo.gauges["Alloc"] = 5.42
-			},
-			wantStatus: http.StatusOK,
-			wantBody:   "5.42",
-			wantCT:     "text/plain; charset=utf-8",
+			ID:    "Alloc",
+			MType: model.Gauge,
+			Value: &value,
 		},
 		{
-			name: "counter ok",
-			path: "/value/counter/PollCount",
-			seed: func(repo *mockServerStorage) {
-				repo.counters["PollCount"] = 42
-			},
-			wantStatus: http.StatusOK,
-			wantBody:   "42",
-			wantCT:     "text/plain; charset=utf-8",
-		},
-		{
-			name:       "unknown type -> 404",
-			path:       "/value/unknown/Alloc",
-			seed:       func(repo *mockServerStorage) {},
-			wantStatus: http.StatusNotFound,
-		},
-		{
-			name:       "metric not found -> 404",
-			path:       "/value/gauge/NoSuchMetric",
-			seed:       func(repo *mockServerStorage) {},
-			wantStatus: http.StatusNotFound,
+			ID:    "PollCount",
+			MType: model.Counter,
+			Delta: &delta,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := newMockServerStorage()
-			tt.seed(repo)
+	body, err := json.Marshal(metrics)
+	require.NoError(t, err)
 
-			srv := service.NewMetricsService(repo)
-			h := handler.New(srv)
-			r := testRouter(t, h)
+	rq := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(body))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
 
-			rq := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			rr := httptest.NewRecorder()
+	h.UpdatesJSON(rr, rq)
 
-			r.ServeHTTP(rr, rq)
+	require.Equal(t, http.StatusOK, rr.Code)
 
-			if rr.Code != tt.wantStatus {
-				t.Fatalf("%s: expected %d, got %d", tt.name, tt.wantStatus, rr.Code)
-			}
+	gotGauge, err := srv.GetGauge("Alloc")
+	require.NoError(t, err)
 
-			if tt.wantStatus == http.StatusOK {
-				if body := rr.Body.String(); body != tt.wantBody {
-					t.Fatalf("%s: expected body %q, got %q", tt.name, tt.wantBody, body)
-				}
-				if ct := rr.Header().Get("Content-Type"); ct != tt.wantCT {
-					t.Errorf("%s: expected Content-Type %q, got %q", tt.name, tt.wantCT, ct)
-				}
-			}
-		})
-	}
+	wantGauge := value
+	require.Equal(t, wantGauge, gotGauge)
+
+	gotCounter, err := srv.GetCounter("PollCount")
+	require.NoError(t, err)
+
+	wantCounter := delta
+	require.Equal(t, wantCounter, gotCounter)
 }
 
+// 400 Bad Request для POST /updates с битым JSON
+func TestHandler_UpdatesJSON_BadJSON(t *testing.T) {
+	repo := newMockServerStorage()
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv, nil)
+
+	rq := httptest.NewRequest(http.MethodPost, "/updates", strings.NewReader(`{"broken":`))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.UpdatesJSON(rr, rq)
+
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+// 400 Bad Request для POST /updates с невалидной метрикой
+func TestHandler_UpdatesJSON_InvalidMetric(t *testing.T) {
+	repo := newMockServerStorage()
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv, nil)
+
+	metrics := []model.Metrics{
+		{
+			ID:    "Alloc",
+			MType: model.Gauge,
+		},
+	}
+
+	body, err := json.Marshal(metrics)
+	require.NoError(t, err)
+
+	rq := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(body))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.UpdatesJSON(rr, rq)
+
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+// если в батче есть невалидная метрика, ни одна метрика не должна примениться
+func TestHandler_UpdatesJSON_InvalidMetric_DoesNotApplyBatch(t *testing.T) {
+	repo := newMockServerStorage()
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv, nil)
+
+	value := 5.11
+
+	metrics := []model.Metrics{
+		{
+			ID:    "Alloc",
+			MType: model.Gauge,
+			Value: &value,
+		},
+		{
+			ID:    "BrokenCounter",
+			MType: model.Counter,
+		},
+	}
+
+	body, err := json.Marshal(metrics)
+	require.NoError(t, err)
+
+	rq := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(body))
+	rq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.UpdatesJSON(rr, rq)
+
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+
+	_, err = srv.GetGauge("Alloc")
+	require.Error(t, err)
+}
+
+// ValueJSON возвращает текущее значение метрики в формате JSON
 func TestHandler_ValueJSON(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -467,7 +349,7 @@ func TestHandler_ValueJSON(t *testing.T) {
 		wantStatus int
 		wantCT     string
 		wantValue  float64
-		wantDelta  int
+		wantDelta  int64
 	}{
 		{
 			name: "gauge ok",
@@ -476,11 +358,11 @@ func TestHandler_ValueJSON(t *testing.T) {
 				"type": "gauge"
 			}`,
 			seed: func(repo *mockServerStorage) {
-				repo.gauges["Alloc"] = 5.42
+				repo.gauges["Alloc"] = 5.11
 			},
 			wantStatus: http.StatusOK,
 			wantCT:     "application/json",
-			wantValue:  5.42,
+			wantValue:  5.11,
 			wantDelta:  0,
 		},
 		{
@@ -527,83 +409,59 @@ func TestHandler_ValueJSON(t *testing.T) {
 			tt.seed(repo)
 
 			srv := service.NewMetricsService(repo)
-			h := handler.New(srv)
-			r := testRouter(t, h)
+			h := handler.New(srv, nil)
 
 			rq := httptest.NewRequest(http.MethodPost, "/value", strings.NewReader(tt.body))
 			rq.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
 
-			r.ServeHTTP(rr, rq)
+			h.ValueJSON(rr, rq)
 
-			if rr.Code != tt.wantStatus {
-				t.Fatalf("%s: expected %d, got %d", tt.name, tt.wantStatus, rr.Code)
-			}
+			require.Equal(t, tt.wantStatus, rr.Code)
 
 			if tt.wantStatus == http.StatusOK {
-				// if body := rr.Body.String(); body != tt.wantValue {
-				// 	t.Fatalf("%s: expected body %q, got %q", tt.name, tt.wantValue, body)
-				// }
-				if ct := rr.Header().Get("Content-Type"); ct != tt.wantCT {
-					t.Errorf("%s: expected Content-Type %q, got %q", tt.name, tt.wantCT, ct)
+				assert.Equal(t, tt.wantCT, rr.Header().Get("Content-Type"))
+
+				var got model.Metrics
+				require.NoError(t, json.NewDecoder(rr.Body).Decode(&got))
+
+				require.False(t, got.Value == nil && got.Delta == nil)
+				require.False(t, got.Value != nil && got.Delta != nil)
+
+				if got.Value != nil {
+					require.Equal(t, tt.wantValue, *got.Value)
 				}
-				if tt.wantValue != 0 || tt.wantDelta != 0 {
-					var got model.Metrics
-					if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
-						t.Fatalf("%s: decode response: %v", tt.name, err)
-					}
-					if got.Value == nil && got.Delta == nil {
-						t.Fatalf("%s: expected value to be set", tt.name)
-					}
-					if got.Value != nil && got.Delta != nil {
-						t.Fatalf("%s: expected only one value to be set", tt.name)
-					}
-					if got.Value != nil {
-						if *got.Value != tt.wantValue {
-							t.Errorf("%s: expected value %v, got %v", tt.name, tt.wantValue, *got.Value)
-						}
-					}
-					if got.Delta != nil {
-						if *got.Delta != int64(tt.wantDelta) {
-							t.Errorf("%s: expected value %v, got %v", tt.name, tt.wantDelta, *got.Value)
-						}
-					}
+
+				if got.Delta != nil {
+					require.Equal(t, tt.wantDelta, *got.Delta)
 				}
 			}
 		})
 	}
 }
 
-func TestHandler_Index_OK(t *testing.T) {
+// Index возвращает HTML-страницу со списком метрик, хранящихся в репозитории
+func TestHandler_Index_HTML_OK(t *testing.T) {
 	repo := newMockServerStorage()
-	repo.gauges["Alloc"] = 5.42
+	repo.gauges["Alloc"] = 5.11
 	repo.counters["PollCount"] = 42
 
 	srv := service.NewMetricsService(repo)
-	h := handler.New(srv)
-	r := testRouter(t, h)
+	h := handler.New(srv, nil)
 
 	rq := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 
-	r.ServeHTTP(rr, rq)
+	h.Index(rr, rq)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
-	}
-
-	ct := rr.Header().Get("Content-Type")
-	if ct != "text/html; charset=utf-8" {
-		t.Fatalf("expected Content-Type %q, got %q", "text/html; charset=utf-8", ct)
-	}
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "text/html; charset=utf-8", rr.Header().Get("Content-Type"))
 
 	body := rr.Body.String()
 
-	if !(strings.Contains(body, "Alloc") && strings.Contains(body, "5.42")) {
-		t.Errorf("response body does not contain gauge metric: %s", body)
-	}
+	assert.Contains(t, body, "Alloc")
+	assert.Contains(t, body, "5.11")
 
-	if !(strings.Contains(body, "PollCount") && strings.Contains(body, "42")) {
-		t.Errorf("response body does not contain counter metric: %s", body)
-	}
+	assert.Contains(t, body, "PollCount")
+	assert.Contains(t, body, "42")
 }

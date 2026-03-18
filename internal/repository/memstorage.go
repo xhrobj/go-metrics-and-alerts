@@ -1,8 +1,9 @@
 package repository
 
 import (
-	"errors"
 	"sync"
+
+	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
 
 // MemStorage хранит метрики в памяти.
@@ -21,68 +22,92 @@ func NewMemStorage() *MemStorage {
 }
 
 // UpdateGauge сохраняет значение gauge-метрики.
-func (m *MemStorage) UpdateGauge(metricName string, value float64) {
+func (m *MemStorage) UpdateGauge(metricName string, value float64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.gauges[metricName] = value
+
+	return nil
 }
 
 // UpdateCounter увеличивает значение counter-метрики на delta.
-func (m *MemStorage) UpdateCounter(metricName string, delta int64) {
+func (m *MemStorage) UpdateCounter(metricName string, delta int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.counters[metricName] += delta
+
+	return nil
+}
+
+// UpdateMetrics пакетно обновляет метрики под одной блокировкой.
+func (m *MemStorage) UpdateMetrics(metrics []model.Metrics) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, metric := range metrics {
+		switch metric.MType {
+		case model.Gauge:
+			m.gauges[metric.ID] = *metric.Value
+		case model.Counter:
+			m.counters[metric.ID] += *metric.Delta
+		}
+	}
+
+	return nil
 }
 
 // GetGauge возвращает значение gauge-метрики.
+// Если метрика не найдена, возвращается ErrMetricNotFound.
 func (m *MemStorage) GetGauge(metricName string) (float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	value, saved := m.gauges[metricName]
 	if !saved {
-		return 0, errors.New("no data")
+		return 0, ErrMetricNotFound
 	}
 
 	return value, nil
 }
 
 // GetCounter возвращает значение counter-метрики.
+// Если метрика не найдена, возвращается ErrMetricNotFound.
 func (m *MemStorage) GetCounter(metricName string) (int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	total, saved := m.counters[metricName]
 	if !saved {
-		return 0, errors.New("no data")
+		return 0, ErrMetricNotFound
 	}
 
 	return total, nil
 }
 
-// Snapshot возвращает копию всех метрик.
-func (m *MemStorage) Snapshot() (gaugesCopy map[string]float64, countersCopy map[string]int64) {
+// Snapshot возвращает снимок (копию) всех метрик.
+// Результат разделяется на две map: gauges и counters.
+func (m *MemStorage) Snapshot() (map[string]float64, map[string]int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	gaugesCopy = make(map[string]float64, len(m.gauges))
+	gaugesCopy := make(map[string]float64, len(m.gauges))
 	for k, v := range m.gauges {
 		gaugesCopy[k] = v
 	}
 
-	countersCopy = make(map[string]int64, len(m.counters))
+	countersCopy := make(map[string]int64, len(m.counters))
 	for k, v := range m.counters {
 		countersCopy[k] = v
 	}
 
-	return
+	return gaugesCopy, countersCopy, nil
 }
 
 // SetGauge устанавливает значение gauge-метрики.
 func (m *MemStorage) SetGauge(metricName string, value float64) {
-	m.UpdateGauge(metricName, value)
+	_ = m.UpdateGauge(metricName, value)
 }
 
 // SetCounter устанавливает значение counter-метрики.

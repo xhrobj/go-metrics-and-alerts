@@ -1,21 +1,25 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
 // MetricsStorage описывает интерфейс хранилища метрик,
 // используемого сервисом.
 type MetricsStorage interface {
-	UpdateGauge(string, float64)
-	UpdateCounter(string, int64)
+	UpdateGauge(string, float64) error
+	UpdateCounter(string, int64) error
+
+	UpdateMetrics([]model.Metrics) error
 
 	GetGauge(string) (float64, error)
 	GetCounter(string) (int64, error)
 
-	Snapshot() (map[string]float64, map[string]int64)
+	Snapshot() (map[string]float64, map[string]int64, error)
 }
 
 // Saver описывает механизм сохранения состояния метрик
@@ -46,18 +50,36 @@ func (m *MetricsService) EnableSyncSave(syncPersistence Saver) {
 
 // UpdateGauge сохраняет значение gauge-метрики.
 func (m *MetricsService) UpdateGauge(metricName string, value float64) error {
-	m.repo.UpdateGauge(metricName, value)
+	if err := m.repo.UpdateGauge(metricName, value); err != nil {
+		return fmt.Errorf("update gauge: %w", err)
+	}
 
 	if err := m.saveIfSync(); err != nil {
 		return fmt.Errorf("sync save failed: %w", err)
 	}
+
+	return nil
+}
+
+// UpdateMetrics сохраняет набор метрик за одну операцию.
+func (m *MetricsService) UpdateMetrics(metrics []model.Metrics) error {
+	if err := m.repo.UpdateMetrics(metrics); err != nil {
+		return fmt.Errorf("update metrics: %w", err)
+	}
+
+	if err := m.saveIfSync(); err != nil {
+		return fmt.Errorf("sync save failed: %w", err)
+	}
+
 	return nil
 }
 
 // UpdateCounter увеличивает значение counter-метрики на delta
 // и возвращает итоговое значение счётчика.
 func (m *MetricsService) UpdateCounter(metricName string, delta int64) (int64, error) {
-	m.repo.UpdateCounter(metricName, delta)
+	if err := m.repo.UpdateCounter(metricName, delta); err != nil {
+		return 0, fmt.Errorf("update counter: %w", err)
+	}
 
 	if err := m.saveIfSync(); err != nil {
 		return 0, fmt.Errorf("sync save failed: %w", err)
@@ -65,7 +87,7 @@ func (m *MetricsService) UpdateCounter(metricName string, delta int64) (int64, e
 
 	total, err := m.repo.GetCounter(metricName)
 	if err != nil {
-		return 0, fmt.Errorf("get counter: %w", err)
+		return 0, fmt.Errorf("get updated counter: %w", err)
 	}
 
 	return total, nil
@@ -73,17 +95,30 @@ func (m *MetricsService) UpdateCounter(metricName string, delta int64) (int64, e
 
 // GetGauge возвращает текущее значение gauge-метрики.
 func (m *MetricsService) GetGauge(metricName string) (float64, error) {
-	return m.repo.GetGauge(metricName)
+	value, err := m.repo.GetGauge(metricName)
+	if err != nil {
+		if errors.Is(err, repository.ErrMetricNotFound) {
+			return 0, err
+		}
+		return 0, fmt.Errorf("get gauge: %w", err)
+	}
+	return value, nil
 }
 
 // GetCounter возвращает текущее значение counter-метрики.
 func (m *MetricsService) GetCounter(metricName string) (int64, error) {
-	return m.repo.GetCounter(metricName)
+	total, err := m.repo.GetCounter(metricName)
+	if err != nil {
+		if errors.Is(err, repository.ErrMetricNotFound) {
+			return 0, err
+		}
+		return 0, fmt.Errorf("get counter: %w", err)
+	}
+	return total, nil
 }
 
-// Snapshot возвращает копию всех метрик,
-// сохранённых в хранилище.
-func (m *MetricsService) Snapshot() (map[string]float64, map[string]int64) {
+// Snapshot возвращает копию всех метрик, сохранённых в хранилище.
+func (m *MetricsService) Snapshot() (map[string]float64, map[string]int64, error) {
 	return m.repo.Snapshot()
 }
 

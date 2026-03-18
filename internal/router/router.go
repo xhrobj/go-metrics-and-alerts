@@ -19,12 +19,10 @@ func New(h *handler.Handler, log *zap.Logger) http.Handler {
 	r.Use(appmiddleware.WithLogging(log))
 	r.Use(appmiddleware.WithGzip)
 
-	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("pong"))
-	})
+	r.Get("/ping", h.Ping)
 
 	r.HandleFunc("/update/{type}/{name}/{value}", h.Update)
+	r.Post("/updates", h.UpdatesJSON)
 	r.Post("/update", h.UpdateJSON)
 
 	r.Get("/value/{type}/{name}", h.Value)

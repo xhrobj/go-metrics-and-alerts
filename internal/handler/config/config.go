@@ -13,4 +13,7 @@ type Config struct {
 
 	// Restore - определяет, нужно ли загружать метрики из файла при старте.
 	Restore bool
+
+	// DatabaseDSN — строка подключения к базе данных PostgreSQL.
+	DatabaseDSN string
 }

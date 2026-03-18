@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -18,21 +19,25 @@ type Service interface {
 	UpdateGauge(string, float64) error
 	UpdateCounter(string, int64) (int64, error)
 
+	UpdateMetrics([]model.Metrics) error
+
 	GetGauge(string) (float64, error)
 	GetCounter(string) (int64, error)
 
-	Snapshot() (map[string]float64, map[string]int64)
+	Snapshot() (map[string]float64, map[string]int64, error)
 }
 
 // Handler обрабатывает HTTP-запросы, связанные с метриками.
 type Handler struct {
 	service Service
+	db      *sql.DB
 }
 
-// New создаёт новый Handler, использующий переданный сервис метрик.
-func New(service Service) *Handler {
+// New создаёт новый Handler, использующий переданный сервис метрик и соединение с БД
+func New(service Service, db *sql.DB) *Handler {
 	return &Handler{
 		service: service,
+		db:      db,
 	}
 }
 
@@ -120,53 +125,81 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// missing name -> 404
-	if metric.ID == "" {
-		w.WriteHeader(http.StatusNotFound)
+	status := validateMetric(metric)
+	if status != http.StatusOK {
+		w.WriteHeader(status)
 		return
 	}
 
-	// invalid type or value -> 400
 	switch metric.MType {
 	case model.Gauge:
-		if metric.Value == nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		if err := h.service.UpdateGauge(metric.ID, *metric.Value); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, model.Metrics{
+		writeMetricJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Gauge,
 			Value: metric.Value,
 		})
 
 	case model.Counter:
-		if metric.Delta == nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		total, err := h.service.UpdateCounter(metric.ID, *metric.Delta)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, model.Metrics{
+		writeMetricJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Counter,
 			Delta: &total,
 		})
 
 	default:
+		// NOTE: защитная ветка - validateMetric уже должен был отфильтровать некорректный тип
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+}
+
+// UpdatesJSON принимает набор метрик на хранение.
+// Данные метрик передаются в теле POST-запроса в формате JSON.
+func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
+	// method must be POST
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// invalid Content-Type
+	ct := r.Header.Get("Content-Type")
+	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), "application/json") {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	var metrics []model.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&metrics); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	for _, metric := range metrics {
+		status := validateMetric(metric)
+		if status != http.StatusOK {
+			w.WriteHeader(status)
+			return
+		}
+	}
+
+	if err := h.service.UpdateMetrics(metrics); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // Value возвращает текущее значение метрики в текстовом виде.
@@ -235,14 +268,14 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	case model.Gauge:
 		value, err := h.service.GetGauge(metric.ID)
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, model.Metrics{
+			writeMetricJSON(w, http.StatusNotFound, model.Metrics{
 				ID:    metric.ID,
 				MType: model.Gauge,
 			})
 			return
 		}
 
-		writeJSON(w, http.StatusOK, model.Metrics{
+		writeMetricJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Gauge,
 			Value: &value,
@@ -251,14 +284,14 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	case model.Counter:
 		value, err := h.service.GetCounter(metric.ID)
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, model.Metrics{
+			writeMetricJSON(w, http.StatusNotFound, model.Metrics{
 				ID:    metric.ID,
 				MType: model.Counter,
 			})
 			return
 		}
 
-		writeJSON(w, http.StatusOK, model.Metrics{
+		writeMetricJSON(w, http.StatusOK, model.Metrics{
 			ID:    metric.ID,
 			MType: model.Counter,
 			Delta: &value,
@@ -274,7 +307,11 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 // Index возвращает HTML-страницу со списком всех известных метрик
 // и их текущих значений.
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
-	gauges, counters := h.service.Snapshot()
+	gauges, counters, err := h.service.Snapshot()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	var out strings.Builder
 	out.WriteString("<!doctype html><html><head><meta charset=\"utf-8\">")
@@ -297,7 +334,47 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(out.String()))
 }
 
-func writeJSON(w http.ResponseWriter, status int, metric model.Metrics) {
+// Ping проверяет соединение с базой данных.
+func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
+	if h.db == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.db.Ping(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func validateMetric(metric model.Metrics) int {
+	// missing name -> 404
+	// NOTE: Требование из Инкремента 1:
+	// "При попытке передать запрос без имени метрики возвращать http.StatusNotFound"
+	if metric.ID == "" {
+		return http.StatusNotFound
+	}
+
+	// invalid type or value -> 400
+	switch metric.MType {
+	case model.Gauge:
+		if metric.Value == nil {
+			return http.StatusBadRequest
+		}
+	case model.Counter:
+		if metric.Delta == nil {
+			return http.StatusBadRequest
+		}
+	default:
+		return http.StatusBadRequest
+	}
+
+	return http.StatusOK
+}
+
+func writeMetricJSON(w http.ResponseWriter, status int, metric model.Metrics) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(metric)
