@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"sync"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
@@ -22,7 +23,7 @@ func NewMemStorage() *MemStorage {
 }
 
 // UpdateGauge сохраняет значение gauge-метрики.
-func (m *MemStorage) UpdateGauge(metricName string, value float64) error {
+func (m *MemStorage) UpdateGauge(_ context.Context, metricName string, value float64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -32,7 +33,7 @@ func (m *MemStorage) UpdateGauge(metricName string, value float64) error {
 }
 
 // UpdateCounter увеличивает значение counter-метрики на delta.
-func (m *MemStorage) UpdateCounter(metricName string, delta int64) error {
+func (m *MemStorage) UpdateCounter(_ context.Context, metricName string, delta int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -42,7 +43,7 @@ func (m *MemStorage) UpdateCounter(metricName string, delta int64) error {
 }
 
 // UpdateMetrics пакетно обновляет метрики под одной блокировкой.
-func (m *MemStorage) UpdateMetrics(metrics []model.Metrics) error {
+func (m *MemStorage) UpdateMetrics(_ context.Context, metrics []model.Metrics) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -60,7 +61,7 @@ func (m *MemStorage) UpdateMetrics(metrics []model.Metrics) error {
 
 // GetGauge возвращает значение gauge-метрики.
 // Если метрика не найдена, возвращается ErrMetricNotFound.
-func (m *MemStorage) GetGauge(metricName string) (float64, error) {
+func (m *MemStorage) GetGauge(_ context.Context, metricName string) (float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -74,7 +75,7 @@ func (m *MemStorage) GetGauge(metricName string) (float64, error) {
 
 // GetCounter возвращает значение counter-метрики.
 // Если метрика не найдена, возвращается ErrMetricNotFound.
-func (m *MemStorage) GetCounter(metricName string) (int64, error) {
+func (m *MemStorage) GetCounter(_ context.Context, metricName string) (int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -88,7 +89,7 @@ func (m *MemStorage) GetCounter(metricName string) (int64, error) {
 
 // Snapshot возвращает снимок (копию) всех метрик.
 // Результат разделяется на две map: gauges и counters.
-func (m *MemStorage) Snapshot() (map[string]float64, map[string]int64, error) {
+func (m *MemStorage) Snapshot(_ context.Context) (map[string]float64, map[string]int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -107,7 +108,10 @@ func (m *MemStorage) Snapshot() (map[string]float64, map[string]int64, error) {
 
 // SetGauge устанавливает значение gauge-метрики.
 func (m *MemStorage) SetGauge(metricName string, value float64) {
-	_ = m.UpdateGauge(metricName, value)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.gauges[metricName] = value
 }
 
 // SetCounter устанавливает значение counter-метрики.

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -10,9 +11,9 @@ import (
 
 // AgentStorage описывает хранилище метрик, используемое Агентом.
 type AgentStorage interface {
-	UpdateGauge(string, float64) error
-	UpdateCounter(string, int64) error
-	Snapshot() (map[string]float64, map[string]int64, error)
+	UpdateGauge(context.Context, string, float64) error
+	UpdateCounter(context.Context, string, int64) error
+	Snapshot(context.Context) (map[string]float64, map[string]int64, error)
 }
 
 // Agent собирает runtime-метрики и отправляет их на сервер по HTTP.

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -23,9 +24,10 @@ func NewPostgresStorage(db *sql.DB) *PostgresStorage {
 
 // UpdateGauge сохраняет значение gauge-метрики.
 // Если метрика уже существует, её значение перезаписывается.
-func (p *PostgresStorage) UpdateGauge(metricName string, value float64) error {
-	return retryDBOperation(func() error {
-		_, err := p.db.Exec(
+func (p *PostgresStorage) UpdateGauge(ctx context.Context, metricName string, value float64) error {
+	return retryDBOperation(ctx, func() error {
+		_, err := p.db.ExecContext(
+			ctx,
 			`INSERT INTO metrics (id, type, value)
 		 	 VALUES ($1, 'gauge', $2)
 		 	 ON CONFLICT (id, type)
@@ -44,9 +46,10 @@ func (p *PostgresStorage) UpdateGauge(metricName string, value float64) error {
 
 // UpdateCounter увеличивает значение counter-метрики на delta.
 // Если метрика ещё не существует, она создаётся.
-func (p *PostgresStorage) UpdateCounter(metricName string, delta int64) error {
-	return retryDBOperation(func() error {
-		_, err := p.db.Exec(
+func (p *PostgresStorage) UpdateCounter(ctx context.Context, metricName string, delta int64) error {
+	return retryDBOperation(ctx, func() error {
+		_, err := p.db.ExecContext(
+			ctx,
 			`INSERT INTO metrics (id, type, total)
 		 	 VALUES ($1, 'counter', $2)
 		 	 ON CONFLICT (id, type)
@@ -64,9 +67,9 @@ func (p *PostgresStorage) UpdateCounter(metricName string, delta int64) error {
 }
 
 // UpdateMetrics пакетно обновляет метрики в рамках одной транзакции.
-func (p *PostgresStorage) UpdateMetrics(metrics []model.Metrics) error {
-	return retryDBOperation(func() error {
-		tx, err := p.db.Begin()
+func (p *PostgresStorage) UpdateMetrics(ctx context.Context, metrics []model.Metrics) error {
+	return retryDBOperation(ctx, func() error {
+		tx, err := p.db.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("begin tx: %w", err)
 		}
@@ -78,7 +81,8 @@ func (p *PostgresStorage) UpdateMetrics(metrics []model.Metrics) error {
 		for _, metric := range metrics {
 			switch metric.MType {
 			case model.Gauge:
-				_, err = tx.Exec(
+				_, err = tx.ExecContext(
+					ctx,
 					`INSERT INTO metrics (id, type, value)
 				 	 VALUES ($1, 'gauge', $2)
 				 	 ON CONFLICT (id, type)
@@ -91,7 +95,8 @@ func (p *PostgresStorage) UpdateMetrics(metrics []model.Metrics) error {
 				}
 
 			case model.Counter:
-				_, err = tx.Exec(
+				_, err = tx.ExecContext(
+					ctx,
 					`INSERT INTO metrics (id, type, total)
 				 	 VALUES ($1, 'counter', $2)
 				 	 ON CONFLICT (id, type)
@@ -115,11 +120,12 @@ func (p *PostgresStorage) UpdateMetrics(metrics []model.Metrics) error {
 
 // GetGauge возвращает значение gauge-метрики.
 // Если метрика не найдена, возвращается ErrMetricNotFound.
-func (p *PostgresStorage) GetGauge(metricName string) (float64, error) {
+func (p *PostgresStorage) GetGauge(ctx context.Context, metricName string) (float64, error) {
 	var value float64
 
-	err := retryDBOperation(func() error {
-		err := p.db.QueryRow(
+	err := retryDBOperation(ctx, func() error {
+		err := p.db.QueryRowContext(
+			ctx,
 			`SELECT value
 		 	 FROM metrics
 		 	 WHERE id = $1 AND type = 'gauge'`,
@@ -145,11 +151,12 @@ func (p *PostgresStorage) GetGauge(metricName string) (float64, error) {
 
 // GetCounter возвращает значение counter-метрики.
 // Если метрика не найдена, возвращается ErrMetricNotFound.
-func (p *PostgresStorage) GetCounter(metricName string) (int64, error) {
+func (p *PostgresStorage) GetCounter(ctx context.Context, metricName string) (int64, error) {
 	var total int64
 
-	err := retryDBOperation(func() error {
-		err := p.db.QueryRow(
+	err := retryDBOperation(ctx, func() error {
+		err := p.db.QueryRowContext(
+			ctx,
 			`SELECT total
 		 	 FROM metrics
 		 	 WHERE id = $1 AND type = 'counter'`,
@@ -175,14 +182,15 @@ func (p *PostgresStorage) GetCounter(metricName string) (int64, error) {
 
 // Snapshot возвращает снимок всех сохранённых метрик.
 // Результат разделяется на две map: gauges и counters.
-func (p *PostgresStorage) Snapshot() (map[string]float64, map[string]int64, error) {
+func (p *PostgresStorage) Snapshot(ctx context.Context) (map[string]float64, map[string]int64, error) {
 	var (
 		gauges   map[string]float64
 		counters map[string]int64
 	)
 
-	err := retryDBOperation(func() error {
-		rows, err := p.db.Query(
+	err := retryDBOperation(ctx, func() error {
+		rows, err := p.db.QueryContext(
+			ctx,
 			`SELECT id, type, total, value
 		 	 FROM metrics`,
 		)
@@ -237,7 +245,7 @@ func (p *PostgresStorage) Snapshot() (map[string]float64, map[string]int64, erro
 	return gauges, counters, nil
 }
 
-func retryDBOperation(op func() error) error {
+func retryDBOperation(ctx context.Context, op func() error) error {
 	retryDelays := []time.Duration{
 		time.Second * 1,
 		time.Second * 3,
@@ -247,6 +255,10 @@ func retryDBOperation(op func() error) error {
 	var lastErr error
 
 	for attempt := 0; attempt <= len(retryDelays); attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		err := op()
 		if err == nil {
 			return nil

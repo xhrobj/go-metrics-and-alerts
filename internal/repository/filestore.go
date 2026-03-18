@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,7 +11,7 @@ import (
 
 // Snapshotter описывает хранилище, из которого можно получить снимок метрик.
 type Snapshotter interface {
-	Snapshot() (map[string]float64, map[string]int64, error)
+	Snapshot(context.Context) (map[string]float64, map[string]int64, error)
 }
 
 // Restorer описывает хранилище, в которое можно записать восстановленные метрики.
@@ -31,7 +32,7 @@ func NewFileStore(path string) *FileStore {
 
 // Save сохраняет все текущие метрики в файл в формате JSON.
 func (f *FileStore) Save(repo Snapshotter) error {
-	gauges, counters, err := repo.Snapshot()
+	gauges, counters, err := repo.Snapshot(context.Background())
 	if err != nil {
 		return err
 	}

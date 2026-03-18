@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -16,15 +17,15 @@ import (
 // Service описывает бизнес-логику работы с метриками,
 // используемую HTTP-обработчиками.
 type Service interface {
-	UpdateGauge(string, float64) error
-	UpdateCounter(string, int64) (int64, error)
+	UpdateGauge(context.Context, string, float64) error
+	UpdateCounter(context.Context, string, int64) (int64, error)
 
-	UpdateMetrics([]model.Metrics) error
+	UpdateMetrics(context.Context, []model.Metrics) error
 
-	GetGauge(string) (float64, error)
-	GetCounter(string) (int64, error)
+	GetGauge(context.Context, string) (float64, error)
+	GetCounter(context.Context, string) (int64, error)
 
-	Snapshot() (map[string]float64, map[string]int64, error)
+	Snapshot(context.Context) (map[string]float64, map[string]int64, error)
 }
 
 // Handler обрабатывает HTTP-запросы, связанные с метриками.
@@ -44,6 +45,8 @@ func New(service Service, db *sql.DB) *Handler {
 // Update принимает метрику на хранение.
 // Данные метрики передаются через параметры URL.
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// method must be POST
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -76,7 +79,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := h.service.UpdateGauge(metricName, value); err != nil {
+		if err := h.service.UpdateGauge(ctx, metricName, value); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -88,7 +91,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if _, err := h.service.UpdateCounter(metricName, delta); err != nil {
+		if _, err := h.service.UpdateCounter(ctx, metricName, delta); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -106,6 +109,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 // UpdateJSON принимает метрику на хранение.
 // Данные метрики передаются в теле POST-запроса в формате JSON.
 func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// method must be POST
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -133,7 +138,7 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 
 	switch metric.MType {
 	case model.Gauge:
-		if err := h.service.UpdateGauge(metric.ID, *metric.Value); err != nil {
+		if err := h.service.UpdateGauge(ctx, metric.ID, *metric.Value); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -145,7 +150,7 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case model.Counter:
-		total, err := h.service.UpdateCounter(metric.ID, *metric.Delta)
+		total, err := h.service.UpdateCounter(ctx, metric.ID, *metric.Delta)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -167,6 +172,8 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 // UpdatesJSON принимает набор метрик на хранение.
 // Данные метрик передаются в теле POST-запроса в формате JSON.
 func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// method must be POST
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -194,7 +201,7 @@ func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.service.UpdateMetrics(metrics); err != nil {
+	if err := h.service.UpdateMetrics(ctx, metrics); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -205,6 +212,8 @@ func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 // Value возвращает текущее значение метрики в текстовом виде.
 // Тип и имя метрики передаются через параметры URL.
 func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
 
@@ -217,14 +226,14 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	out := ""
 	switch metricType {
 	case model.Gauge:
-		value, err := h.service.GetGauge(metricName)
+		value, err := h.service.GetGauge(ctx, metricName)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		out = strconv.FormatFloat(value, 'f', -1, 64)
 	case model.Counter:
-		value, err := h.service.GetCounter(metricName)
+		value, err := h.service.GetCounter(ctx, metricName)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -241,6 +250,8 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 // ValueJSON возвращает текущее значение метрики в формате JSON.
 // Идентификатор и тип метрики передаются в теле POST-запроса.
 func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -266,7 +277,7 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 
 	switch metric.MType {
 	case model.Gauge:
-		value, err := h.service.GetGauge(metric.ID)
+		value, err := h.service.GetGauge(ctx, metric.ID)
 		if err != nil {
 			writeMetricJSON(w, http.StatusNotFound, model.Metrics{
 				ID:    metric.ID,
@@ -282,7 +293,7 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case model.Counter:
-		value, err := h.service.GetCounter(metric.ID)
+		value, err := h.service.GetCounter(ctx, metric.ID)
 		if err != nil {
 			writeMetricJSON(w, http.StatusNotFound, model.Metrics{
 				ID:    metric.ID,
@@ -307,7 +318,9 @@ func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 // Index возвращает HTML-страницу со списком всех известных метрик
 // и их текущих значений.
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
-	gauges, counters, err := h.service.Snapshot()
+	ctx := r.Context()
+
+	gauges, counters, err := h.service.Snapshot(ctx)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -341,7 +354,7 @@ func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.db.Ping(); err != nil {
+	if err := h.db.PingContext(r.Context()); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

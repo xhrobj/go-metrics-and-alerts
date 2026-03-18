@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"testing"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
@@ -13,7 +14,7 @@ func TestAgent_Poll_UpdatesMetrics(t *testing.T) {
 
 	a.poll()
 
-	gauges, _, _ := repo.Snapshot()
+	gauges, _, _ := repo.Snapshot(context.Background())
 
 	// RandomValue должен существовать
 	if _, ok := gauges["RandomValue"]; !ok {

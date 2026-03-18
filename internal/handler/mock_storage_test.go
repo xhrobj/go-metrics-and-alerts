@@ -1,6 +1,8 @@
 package handler_test
 
 import (
+	"context"
+
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
@@ -18,17 +20,17 @@ func newMockServerStorage() *mockServerStorage {
 	}
 }
 
-func (m *mockServerStorage) UpdateGauge(name string, value float64) error {
+func (m *mockServerStorage) UpdateGauge(ctx context.Context, name string, value float64) error {
 	m.gauges[name] = value
 	return nil
 }
 
-func (m *mockServerStorage) UpdateCounter(name string, delta int64) error {
+func (m *mockServerStorage) UpdateCounter(ctx context.Context, name string, delta int64) error {
 	m.counters[name] += delta
 	return nil
 }
 
-func (m *mockServerStorage) UpdateMetrics(metrics []model.Metrics) error {
+func (m *mockServerStorage) UpdateMetrics(ctx context.Context, metrics []model.Metrics) error {
 	for _, metric := range metrics {
 		switch metric.MType {
 		case model.Gauge:
@@ -40,11 +42,7 @@ func (m *mockServerStorage) UpdateMetrics(metrics []model.Metrics) error {
 	return nil
 }
 
-func (m *mockServerStorage) Snapshot() (map[string]float64, map[string]int64, error) {
-	return m.gauges, m.counters, nil
-}
-
-func (m *mockServerStorage) GetGauge(name string) (float64, error) {
+func (m *mockServerStorage) GetGauge(ctx context.Context, name string) (float64, error) {
 	v, ok := m.gauges[name]
 	if !ok {
 		return 0, repository.ErrMetricNotFound
@@ -52,10 +50,14 @@ func (m *mockServerStorage) GetGauge(name string) (float64, error) {
 	return v, nil
 }
 
-func (m *mockServerStorage) GetCounter(name string) (int64, error) {
+func (m *mockServerStorage) GetCounter(ctx context.Context, name string) (int64, error) {
 	v, ok := m.counters[name]
 	if !ok {
 		return 0, repository.ErrMetricNotFound
 	}
 	return v, nil
+}
+
+func (m *mockServerStorage) Snapshot(ctx context.Context) (map[string]float64, map[string]int64, error) {
+	return m.gauges, m.counters, nil
 }

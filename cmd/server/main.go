@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -45,7 +46,10 @@ func run() error {
 		}
 		defer db.Close()
 
-		if err := db.Ping(); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
+
+		if err := db.PingContext(ctx); err != nil {
 			return err
 		}
 

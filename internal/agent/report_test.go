@@ -2,6 +2,7 @@ package agent
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -41,7 +42,7 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	repo.UpdateGauge("Alloc", 5.11)
+	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
 
 	a, _ := New(repo, server.URL, 2, 10)
 	a.pollSinceReport = 1
@@ -80,7 +81,7 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	repo.UpdateGauge("Alloc", 5.11)
+	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
 
 	a, _ := New(repo, server.URL, 2, 10)
 	a.pollSinceReport = 3

@@ -4,6 +4,7 @@ package handler_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -252,13 +253,13 @@ func TestHandler_UpdatesJSON_OK(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rr.Code)
 
-	gotGauge, err := srv.GetGauge("Alloc")
+	gotGauge, err := srv.GetGauge(context.Background(), "Alloc")
 	require.NoError(t, err)
 
 	wantGauge := value
 	require.Equal(t, wantGauge, gotGauge)
 
-	gotCounter, err := srv.GetCounter("PollCount")
+	gotCounter, err := srv.GetCounter(context.Background(), "PollCount")
 	require.NoError(t, err)
 
 	wantCounter := delta
@@ -336,7 +337,7 @@ func TestHandler_UpdatesJSON_InvalidMetric_DoesNotApplyBatch(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, rr.Code)
 
-	_, err = srv.GetGauge("Alloc")
+	_, err = srv.GetGauge(context.Background(), "Alloc")
 	require.Error(t, err)
 }
 

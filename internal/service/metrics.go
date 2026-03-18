@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -11,15 +12,15 @@ import (
 // MetricsStorage описывает интерфейс хранилища метрик,
 // используемого сервисом.
 type MetricsStorage interface {
-	UpdateGauge(string, float64) error
-	UpdateCounter(string, int64) error
+	UpdateGauge(context.Context, string, float64) error
+	UpdateCounter(context.Context, string, int64) error
 
-	UpdateMetrics([]model.Metrics) error
+	UpdateMetrics(context.Context, []model.Metrics) error
 
-	GetGauge(string) (float64, error)
-	GetCounter(string) (int64, error)
+	GetGauge(context.Context, string) (float64, error)
+	GetCounter(context.Context, string) (int64, error)
 
-	Snapshot() (map[string]float64, map[string]int64, error)
+	Snapshot(context.Context) (map[string]float64, map[string]int64, error)
 }
 
 // Saver описывает механизм сохранения состояния метрик
@@ -49,8 +50,8 @@ func (m *MetricsService) EnableSyncSave(syncPersistence Saver) {
 }
 
 // UpdateGauge сохраняет значение gauge-метрики.
-func (m *MetricsService) UpdateGauge(metricName string, value float64) error {
-	if err := m.repo.UpdateGauge(metricName, value); err != nil {
+func (m *MetricsService) UpdateGauge(ctx context.Context, metricName string, value float64) error {
+	if err := m.repo.UpdateGauge(ctx, metricName, value); err != nil {
 		return fmt.Errorf("update gauge: %w", err)
 	}
 
@@ -62,8 +63,8 @@ func (m *MetricsService) UpdateGauge(metricName string, value float64) error {
 }
 
 // UpdateMetrics сохраняет набор метрик за одну операцию.
-func (m *MetricsService) UpdateMetrics(metrics []model.Metrics) error {
-	if err := m.repo.UpdateMetrics(metrics); err != nil {
+func (m *MetricsService) UpdateMetrics(ctx context.Context, metrics []model.Metrics) error {
+	if err := m.repo.UpdateMetrics(ctx, metrics); err != nil {
 		return fmt.Errorf("update metrics: %w", err)
 	}
 
@@ -76,8 +77,8 @@ func (m *MetricsService) UpdateMetrics(metrics []model.Metrics) error {
 
 // UpdateCounter увеличивает значение counter-метрики на delta
 // и возвращает итоговое значение счётчика.
-func (m *MetricsService) UpdateCounter(metricName string, delta int64) (int64, error) {
-	if err := m.repo.UpdateCounter(metricName, delta); err != nil {
+func (m *MetricsService) UpdateCounter(ctx context.Context, metricName string, delta int64) (int64, error) {
+	if err := m.repo.UpdateCounter(ctx, metricName, delta); err != nil {
 		return 0, fmt.Errorf("update counter: %w", err)
 	}
 
@@ -85,7 +86,7 @@ func (m *MetricsService) UpdateCounter(metricName string, delta int64) (int64, e
 		return 0, fmt.Errorf("sync save failed: %w", err)
 	}
 
-	total, err := m.repo.GetCounter(metricName)
+	total, err := m.repo.GetCounter(ctx, metricName)
 	if err != nil {
 		return 0, fmt.Errorf("get updated counter: %w", err)
 	}
@@ -94,8 +95,8 @@ func (m *MetricsService) UpdateCounter(metricName string, delta int64) (int64, e
 }
 
 // GetGauge возвращает текущее значение gauge-метрики.
-func (m *MetricsService) GetGauge(metricName string) (float64, error) {
-	value, err := m.repo.GetGauge(metricName)
+func (m *MetricsService) GetGauge(ctx context.Context, metricName string) (float64, error) {
+	value, err := m.repo.GetGauge(ctx, metricName)
 	if err != nil {
 		if errors.Is(err, repository.ErrMetricNotFound) {
 			return 0, err
@@ -106,8 +107,8 @@ func (m *MetricsService) GetGauge(metricName string) (float64, error) {
 }
 
 // GetCounter возвращает текущее значение counter-метрики.
-func (m *MetricsService) GetCounter(metricName string) (int64, error) {
-	total, err := m.repo.GetCounter(metricName)
+func (m *MetricsService) GetCounter(ctx context.Context, metricName string) (int64, error) {
+	total, err := m.repo.GetCounter(ctx, metricName)
 	if err != nil {
 		if errors.Is(err, repository.ErrMetricNotFound) {
 			return 0, err
@@ -118,8 +119,8 @@ func (m *MetricsService) GetCounter(metricName string) (int64, error) {
 }
 
 // Snapshot возвращает копию всех метрик, сохранённых в хранилище.
-func (m *MetricsService) Snapshot() (map[string]float64, map[string]int64, error) {
-	return m.repo.Snapshot()
+func (m *MetricsService) Snapshot(ctx context.Context) (map[string]float64, map[string]int64, error) {
+	return m.repo.Snapshot(ctx)
 }
 
 func (m *MetricsService) saveIfSync() error {

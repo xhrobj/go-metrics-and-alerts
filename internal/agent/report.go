@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +37,7 @@ func (a *Agent) report() {
 }
 
 func (a *Agent) buildMetricsBatch() ([]model.Metrics, error) {
-	gauges, _, err := a.repo.Snapshot()
+	gauges, _, err := a.repo.Snapshot(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("snapshot metrics: %w", err)
 	}
