@@ -10,7 +10,7 @@ import (
 // poll() выставляет RandomValue, добавляет runtime-метрики
 func TestAgent_Poll_UpdatesMetrics(t *testing.T) {
 	repo := repository.NewMemStorage()
-	a, _ := New(repo, "example.com:8080", 2, 10)
+	a, _ := New(repo, "example.com:8080", 2, 10, "secret-key")
 
 	a.poll()
 

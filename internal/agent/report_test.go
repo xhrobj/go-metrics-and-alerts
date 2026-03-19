@@ -44,7 +44,7 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	repo := repository.NewMemStorage()
 	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
 
-	a, _ := New(repo, server.URL, 2, 10)
+	a, _ := New(repo, server.URL, 2, 10, "secret-key")
 	a.pollSinceReport = 1
 	a.report()
 
@@ -83,7 +83,7 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	repo := repository.NewMemStorage()
 	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
 
-	a, _ := New(repo, server.URL, 2, 10)
+	a, _ := New(repo, server.URL, 2, 10, "secret-key")
 	a.pollSinceReport = 3
 	a.report()
 
