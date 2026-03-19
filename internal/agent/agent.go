@@ -23,6 +23,7 @@ type Agent struct {
 	pollIntervalInSec   int
 	reportIntervalInSec int
 	client              *resty.Client
+	hashKey             string
 
 	// pollSinceReport — количество вызовов poll() с момента последней отправки
 	// отчёта. Используется для формирования метрики PollCount.
@@ -36,6 +37,7 @@ func New(
 	baseURL string,
 	pollIntervalInSec int,
 	reportIntervalInSec int,
+	hashKey string,
 ) (*Agent, error) {
 	if pollIntervalInSec <= 0 {
 		return nil, fmt.Errorf("poll interval must be > 0, got %d", pollIntervalInSec)
@@ -54,6 +56,7 @@ func New(
 		pollIntervalInSec:   pollIntervalInSec,
 		reportIntervalInSec: reportIntervalInSec,
 		client:              resty.New(),
+		hashKey:             hashKey,
 	}, nil
 }
 
