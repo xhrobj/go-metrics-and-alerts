@@ -79,3 +79,27 @@ func TestWithHash_RestoresRequestBody(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
 }
+
+func TestWithHash_SetsResponseHashHeader(t *testing.T) {
+	hashKey := "god"
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	responseBody := []byte("hello")
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(responseBody)
+	})
+
+	handler := WithHash(hashKey)(next)
+	handler.ServeHTTP(rec, req)
+
+	gotHash := rec.Header().Get("HashSHA256")
+	wantHash := internalhash.CalcHash(responseBody, hashKey)
+
+	if gotHash != wantHash {
+		t.Fatalf("expected response hash %q, got %q", wantHash, gotHash)
+	}
+}
