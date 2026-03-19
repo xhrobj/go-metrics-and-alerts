@@ -12,8 +12,8 @@ import (
 // GetAgentConfig возвращает конфигурацию агента.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -p -r
-//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL.
+//   - флаги: -a -p -r -k
+//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL, KEY
 //
 // Приоритет источников: env > flag > default.
 func GetAgentConfig() (agentConfig.Config, error) {
@@ -22,6 +22,7 @@ func GetAgentConfig() (agentConfig.Config, error) {
 	flag.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address of the HTTP server (host:port)")
 	flag.IntVar(&cfg.PollIntervalInSec, "p", 2, "runtime metrics polling interval in seconds")
 	flag.IntVar(&cfg.ReportIntervalInSec, "r", 10, "metrics reporting interval in seconds")
+	flag.StringVar(&cfg.Key, "k", "", "hash key for request signing")
 
 	flag.Parse()
 
@@ -41,14 +42,18 @@ func GetAgentConfig() (agentConfig.Config, error) {
 		cfg.ReportIntervalInSec = reportIntervalInSec
 	}
 
+	if key := os.Getenv("KEY"); key != "" {
+		cfg.Key = key
+	}
+
 	return cfg, nil
 }
 
 // GetServerConfig возвращает конфигурацию HTTP-сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -i -f -r -d
-//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN
+//   - флаги: -a -i -f -r -d -k
+//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY
 //
 // Приоритет источников: env > flag > default.
 func GetServerConfig() (serverConfig.Config, error) {
@@ -59,6 +64,7 @@ func GetServerConfig() (serverConfig.Config, error) {
 	flag.StringVar(&cfg.FileStoragePath, "f", "metrics-db.json", "path to metrics storage file")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file on startup")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database connection string")
+	flag.StringVar(&cfg.Key, "k", "", "hash key for request signing")
 
 	flag.Parse()
 
@@ -84,6 +90,10 @@ func GetServerConfig() (serverConfig.Config, error) {
 
 	if databaseDSN := os.Getenv("DATABASE_DSN"); databaseDSN != "" {
 		cfg.DatabaseDSN = databaseDSN
+	}
+
+	if key := os.Getenv("KEY"); key != "" {
+		cfg.Key = key
 	}
 
 	return cfg, nil

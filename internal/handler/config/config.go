@@ -16,4 +16,8 @@ type Config struct {
 
 	// DatabaseDSN — строка подключения к базе данных PostgreSQL.
 	DatabaseDSN string
+
+	// Key — "секретный" ключ для вычисления и проверки подписи HTTP-запросов/ответов.
+	// Если не задан, подпись не используется.
+	Key string
 }
