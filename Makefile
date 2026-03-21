@@ -1,7 +1,7 @@
 .PHONY: \
 	build build-server build-agent \
 	clean \
-	test \
+	test test-race \
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
 	run-server run-server-env \
 	run-agent run-agent-env
@@ -35,6 +35,9 @@ clean:
 
 test:
 	go test ./...
+
+test-race:
+	go test -race ./...
 
 postgres-up:
 	docker run --name metrics-postgres \

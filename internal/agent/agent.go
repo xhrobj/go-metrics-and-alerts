@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -28,7 +29,8 @@ type Agent struct {
 
 	// pollSinceReport — количество вызовов poll() с момента последней отправки
 	// отчёта. Используется для формирования метрики PollCount.
-	pollSinceReport int
+	// !!!: делаем поле атомарным
+	pollSinceReport atomic.Int64
 }
 
 // New создаёт нового Агента с указанными параметрами конфигурации.
@@ -46,13 +48,12 @@ func New(
 	if reportIntervalInSec <= 0 {
 		return nil, fmt.Errorf("report interval must be > 0, got %d", reportIntervalInSec)
 	}
+	if rateLimit <= 0 {
+		return nil, fmt.Errorf("rate limit must be > 0, got %d", rateLimit)
+	}
 
 	if !strings.Contains(baseURL, "://") {
 		baseURL = "http://" + baseURL
-	}
-
-	if rateLimit <= 0 {
-		return nil, fmt.Errorf("rate limit must be > 0, got %d", rateLimit)
 	}
 
 	return &Agent{
@@ -68,18 +69,26 @@ func New(
 
 // Run запускает цикл работы агента: периодический сбор и отправку метрик.
 func (a *Agent) Run() {
-	pollTicker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
-	reportTicker := time.NewTicker(time.Duration(a.reportIntervalInSec) * time.Second)
+	go a.runPollLoop()
+	go a.runReportLoop()
 
-	defer pollTicker.Stop()
-	defer reportTicker.Stop()
+	select {}
+}
 
-	for {
-		select {
-		case <-pollTicker.C:
-			a.poll()
-		case <-reportTicker.C:
-			a.report()
-		}
+func (a *Agent) runPollLoop() {
+	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		a.poll()
+	}
+}
+
+func (a *Agent) runReportLoop() {
+	ticker := time.NewTicker(time.Duration(a.reportIntervalInSec) * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		a.report()
 	}
 }

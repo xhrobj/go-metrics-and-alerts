@@ -45,7 +45,7 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
 
 	a, _ := New(repo, server.URL, 2, 10, 5, "secret-key")
-	a.pollSinceReport = 1
+	a.pollSinceReport.Store(1)
 	a.report()
 
 	if requests != 1 {
@@ -84,7 +84,7 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
 
 	a, _ := New(repo, server.URL, 2, 10, 5, "secret-key")
-	a.pollSinceReport = 3
+	a.pollSinceReport.Store(3)
 	a.report()
 
 	if len(metrics) != 2 {
@@ -130,7 +130,7 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 		t.Error("expected counter metric PollCount to be sent")
 	}
 
-	if a.pollSinceReport != 0 {
-		t.Errorf("expected pollSinceReport to be reset to 0, got %d", a.pollSinceReport)
+	if a.pollSinceReport.Load() != 0 {
+		t.Errorf("expected pollSinceReport to be reset to 0, got %d", a.pollSinceReport.Load())
 	}
 }

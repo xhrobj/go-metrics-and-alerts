@@ -17,27 +17,32 @@ import (
 )
 
 func (a *Agent) report() {
-	if a.pollSinceReport == 0 {
+	// запомним значение и обнулим
+	pollCount := a.pollSinceReport.Swap(0)
+	if pollCount == 0 {
 		return
 	}
 
-	metrics, err := a.buildMetricsBatch()
+	metrics, err := a.buildMetricsBatch(pollCount)
 	if err != nil {
+		// метод poll() в соседней горутине мог уже подинкрементить этот
+		// счетчик, поэтому не восстановим, а добавим запомненное ранее значение
+		a.pollSinceReport.Add(pollCount)
 		return
 	}
 
 	if len(metrics) == 0 {
+		a.pollSinceReport.Add(pollCount)
 		return
 	}
 
 	if err := a.sendMetrics(metrics); err != nil {
+		a.pollSinceReport.Add(pollCount)
 		return
 	}
-
-	a.pollSinceReport = 0
 }
 
-func (a *Agent) buildMetricsBatch() ([]model.Metrics, error) {
+func (a *Agent) buildMetricsBatch(pollCount int64) ([]model.Metrics, error) {
 	gauges, _, err := a.repo.Snapshot(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("snapshot metrics: %w", err)
@@ -54,11 +59,13 @@ func (a *Agent) buildMetricsBatch() ([]model.Metrics, error) {
 		})
 	}
 
-	delta := int64(a.pollSinceReport)
+	// ???: здесь есть "проблема", что часть метрик в снепшоте может быть уже "обновленной"
+	// горутиной poll() и "несоответствовать" переданному значению pollCount
+
 	metrics = append(metrics, model.Metrics{
 		ID:    "PollCount",
 		MType: model.Counter,
-		Delta: &delta,
+		Delta: &pollCount,
 	})
 
 	return metrics, nil

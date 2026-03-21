@@ -45,5 +45,6 @@ func (a *Agent) poll() {
 
 	_ = a.repo.UpdateGauge(ctx, "RandomValue", rand.Float64())
 
-	a.pollSinceReport++
+	// !!!: теперь тут атомарный инкремент
+	a.pollSinceReport.Add(1)
 }
