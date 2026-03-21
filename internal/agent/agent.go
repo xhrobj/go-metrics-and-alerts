@@ -22,21 +22,22 @@ type Agent struct {
 	baseURL             string
 	pollIntervalInSec   int
 	reportIntervalInSec int
-	client              *resty.Client
+	rateLimit           int
 	hashKey             string
+	client              *resty.Client
 
 	// pollSinceReport — количество вызовов poll() с момента последней отправки
 	// отчёта. Используется для формирования метрики PollCount.
 	pollSinceReport int
 }
 
-// New создаёт нового агента с указанным хранилищем, адресом сервера
-// и интервалами опроса и отправки метрик.
+// New создаёт нового Агента с указанными параметрами конфигурации.
 func New(
 	repo AgentStorage,
 	baseURL string,
 	pollIntervalInSec int,
 	reportIntervalInSec int,
+	rateLimit int,
 	hashKey string,
 ) (*Agent, error) {
 	if pollIntervalInSec <= 0 {
@@ -50,13 +51,18 @@ func New(
 		baseURL = "http://" + baseURL
 	}
 
+	if rateLimit <= 0 {
+		return nil, fmt.Errorf("rate limit must be > 0, got %d", rateLimit)
+	}
+
 	return &Agent{
 		repo:                repo,
 		baseURL:             baseURL,
 		pollIntervalInSec:   pollIntervalInSec,
 		reportIntervalInSec: reportIntervalInSec,
-		client:              resty.New(),
+		rateLimit:           rateLimit,
 		hashKey:             hashKey,
+		client:              resty.New(),
 	}, nil
 }
 

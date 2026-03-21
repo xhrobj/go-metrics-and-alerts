@@ -12,8 +12,8 @@ import (
 // GetAgentConfig возвращает конфигурацию агента.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -p -r -k
-//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL, KEY
+//   - флаги: -a -p -r -l -k
+//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL, RATE_LIMIT, KEY
 //
 // Приоритет источников: env > flag > default.
 func GetAgentConfig() (agentConfig.Config, error) {
@@ -22,6 +22,7 @@ func GetAgentConfig() (agentConfig.Config, error) {
 	flag.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address of the HTTP server (host:port)")
 	flag.IntVar(&cfg.PollIntervalInSec, "p", 2, "runtime metrics polling interval in seconds")
 	flag.IntVar(&cfg.ReportIntervalInSec, "r", 10, "metrics reporting interval in seconds")
+	flag.IntVar(&cfg.RateLimit, "l", 5, "limit of simultaneous outgoing requests")
 	flag.StringVar(&cfg.Key, "k", "", "hash key for request signing")
 
 	flag.Parse()
@@ -40,6 +41,12 @@ func GetAgentConfig() (agentConfig.Config, error) {
 		return cfg, err
 	} else if ok {
 		cfg.ReportIntervalInSec = reportIntervalInSec
+	}
+
+	if rateLimit, ok, err := getEnvInt("RATE_LIMIT"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.RateLimit = rateLimit
 	}
 
 	if key := os.Getenv("KEY"); key != "" {

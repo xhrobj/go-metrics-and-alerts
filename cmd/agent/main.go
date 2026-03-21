@@ -26,6 +26,7 @@ func run() error {
 		cfg.ServerAddr,
 		cfg.PollIntervalInSec,
 		cfg.ReportIntervalInSec,
+		cfg.RateLimit,
 		cfg.Key,
 	)
 
