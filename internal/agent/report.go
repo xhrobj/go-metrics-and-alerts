@@ -24,8 +24,8 @@ func (a *Agent) report() {
 
 	metrics, err := a.buildMetricsBatch(pollCount)
 	if err != nil {
-		// метод poll() в соседней горутине мог уже подинкрементить этот
-		// счетчик, поэтому не восстановим, а добавим запомненное ранее значение
+		// метод poll() в соседней горутине мог уже подинкрементить этот счетчик,
+		// поэтому не восстановим, а добавим запомненное ранее значение обратно
 		a.pollSinceReport.Add(pollCount)
 		return
 	}
@@ -35,9 +35,9 @@ func (a *Agent) report() {
 		return
 	}
 
-	if err := a.sendMetrics(metrics); err != nil {
-		a.pollSinceReport.Add(pollCount)
-		return
+	a.sendQueue <- reportTask{
+		metrics:   metrics,
+		pollCount: pollCount,
 	}
 }
 
@@ -46,6 +46,10 @@ func (a *Agent) buildMetricsBatch(pollCount int64) ([]model.Metrics, error) {
 	if err != nil {
 		return nil, fmt.Errorf("snapshot metrics: %w", err)
 	}
+
+	// Snapshot сейчас не гарантирует одномоментную согласованность всех метрик:
+	// часть gauge-метрик может быть уже обновлена другой горутиной в момент
+	// формирования batch.
 
 	metrics := make([]model.Metrics, 0, len(gauges)+1)
 
@@ -57,9 +61,6 @@ func (a *Agent) buildMetricsBatch(pollCount int64) ([]model.Metrics, error) {
 			Value: &v,
 		})
 	}
-
-	// ???: здесь есть "проблема", что часть метрик в снепшоте может быть уже "обновленной"
-	// горутиной poll() и "несоответствовать" переданному значению pollCount
 
 	metrics = append(metrics, model.Metrics{
 		ID:    "PollCount",

@@ -7,14 +7,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
-// report() делает POST и выставляет требуемый Content-Type
+// report() ставит задачу в очередь, а воркер отправляет POST с нужными заголовками.
 func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	requests := 0
+	done := make(chan struct{}, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
@@ -38,26 +40,42 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
+		done <- struct{}{}
 	}))
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
+	_ = repo.UpdateGauge(context.Background(), "Alloc", 5.11)
 
-	a, _ := New(repo, server.URL, 2, 10, 5, "secret-key")
+	a, err := New(repo, server.URL, 2, 10, 5, "secret-key")
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	go a.runSendWorker()
+
 	a.pollSinceReport.Store(1)
 	a.report()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for request")
+	}
 
 	if requests != 1 {
 		t.Fatalf("expected 1 requests, got %d", requests)
 	}
 }
 
-// report() отправляет корректные JSON-метрики на /updates
+// report() ставит в очередь batch, а воркер отправляет корректные JSON-метрики на /updates.
 func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	var metrics []model.Metrics
+	done := make(chan struct{}, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() { done <- struct{}{} }()
+
 		if r.URL.Path != "/updates" {
 			t.Fatalf("expected path /updates, got %q", r.URL.Path)
 		}
@@ -81,11 +99,23 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
+	_ = repo.UpdateGauge(context.Background(), "Alloc", 5.11)
 
-	a, _ := New(repo, server.URL, 2, 10, 5, "secret-key")
+	a, err := New(repo, server.URL, 2, 10, 5, "secret-key")
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	go a.runSendWorker()
+
 	a.pollSinceReport.Store(3)
 	a.report()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for request")
+	}
 
 	if len(metrics) != 2 {
 		t.Fatalf("expected 2 metrics, got %d", len(metrics))
