@@ -3,11 +3,13 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/shirou/gopsutil/v4/cpu"
 )
 
 // AgentStorage описывает хранилище метрик, используемое Агентом.
@@ -29,7 +31,6 @@ type Agent struct {
 
 	// pollSinceReport — количество вызовов poll() с момента последней отправки
 	// отчёта. Используется для формирования метрики PollCount.
-	// !!!: делаем поле атомарным
 	pollSinceReport atomic.Int64
 }
 
@@ -67,20 +68,36 @@ func New(
 	}, nil
 }
 
-// Run запускает цикл работы агента: периодический сбор и отправку метрик.
+// Run запускает независимые горутины:
+// сбор runtime-метрик, сбор системных метрик и отправку метрик на Сервер.
 func (a *Agent) Run() {
-	go a.runPollLoop()
+	go a.runRuntimePollLoop()
+	go a.runSystemPollLoop()
 	go a.runReportLoop()
 
 	select {}
 }
 
-func (a *Agent) runPollLoop() {
+func (a *Agent) runRuntimePollLoop() {
 	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		a.poll()
+		a.pollRuntime()
+	}
+}
+func (a *Agent) runSystemPollLoop() {
+	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
+	defer ticker.Stop()
+
+	// Первый вызов нужен, чтобы инициализировать базу для cpu.Percent(0, true).
+	// NOTE: https://pkg.go.dev/github.com/shirou/gopsutil/v4/cpu
+	if _, err := cpu.Percent(0, true); err != nil {
+		logError(fmt.Errorf("init cpu percent: %w", err))
+	}
+
+	for range ticker.C {
+		a.pollSystem()
 	}
 }
 
@@ -91,4 +108,11 @@ func (a *Agent) runReportLoop() {
 	for range ticker.C {
 		a.report()
 	}
+}
+
+func logError(err error) {
+	if err == nil {
+		return
+	}
+	log.Printf("(×﹏×) %v", err)
 }

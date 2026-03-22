@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -145,11 +144,4 @@ func gzipCompress(data []byte) ([]byte, error) {
 func isRetriableAgentError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr)
-}
-
-func logError(err error) {
-	if err == nil {
-		return
-	}
-	log.Printf("(×﹏×) %v", err)
 }
