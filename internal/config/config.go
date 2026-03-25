@@ -27,7 +27,7 @@ func GetAgentConfig() (agentConfig.Config, error) {
 
 	flag.Parse()
 
-	if serverAddr := os.Getenv("ADDRESS"); serverAddr != "" {
+	if serverAddr, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.ServerAddr = serverAddr
 	}
 
@@ -49,7 +49,7 @@ func GetAgentConfig() (agentConfig.Config, error) {
 		cfg.RateLimit = rateLimit
 	}
 
-	if key := os.Getenv("KEY"); key != "" {
+	if key, ok := os.LookupEnv("KEY"); ok {
 		cfg.Key = key
 	}
 
@@ -75,7 +75,7 @@ func GetServerConfig() (serverConfig.Config, error) {
 
 	flag.Parse()
 
-	if serverAddr := os.Getenv("ADDRESS"); serverAddr != "" {
+	if serverAddr, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.ServerAddr = serverAddr
 	}
 
@@ -85,7 +85,7 @@ func GetServerConfig() (serverConfig.Config, error) {
 		cfg.StoreIntervalInSec = storeIntervalInSec
 	}
 
-	if fileStoragePath := os.Getenv("FILE_STORAGE_PATH"); fileStoragePath != "" {
+	if fileStoragePath, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
 		cfg.FileStoragePath = fileStoragePath
 	}
 
@@ -95,11 +95,11 @@ func GetServerConfig() (serverConfig.Config, error) {
 		cfg.Restore = restore
 	}
 
-	if databaseDSN := os.Getenv("DATABASE_DSN"); databaseDSN != "" {
+	if databaseDSN, ok := os.LookupEnv("DATABASE_DSN"); ok {
 		cfg.DatabaseDSN = databaseDSN
 	}
 
-	if key := os.Getenv("KEY"); key != "" {
+	if key, ok := os.LookupEnv("KEY"); ok {
 		cfg.Key = key
 	}
 
@@ -107,7 +107,7 @@ func GetServerConfig() (serverConfig.Config, error) {
 }
 
 func getEnvInt(name string) (int, bool, error) {
-	if v := os.Getenv(name); v != "" {
+	if v, ok := os.LookupEnv(name); ok {
 		i, err := strconv.Atoi(v)
 		if err != nil {
 			return 0, false, err
@@ -118,7 +118,7 @@ func getEnvInt(name string) (int, bool, error) {
 }
 
 func getEnvBool(name string) (bool, bool, error) {
-	if v := os.Getenv(name); v != "" {
+	if v, ok := os.LookupEnv(name); ok {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
 			return false, false, err
