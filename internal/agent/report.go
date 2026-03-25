@@ -106,10 +106,18 @@ func (a *Agent) sendMetrics(metrics []model.Metrics) error {
 		resp, err := req.Post(a.baseURL + "/updates")
 
 		if err == nil {
-			if resp.StatusCode() != http.StatusOK {
-				return fmt.Errorf("send metrics batch: unexpected status code: %d", resp.StatusCode())
+			if resp.StatusCode() == http.StatusOK {
+				return nil
 			}
-			return nil
+
+			lastErr = fmt.Errorf("send metrics batch: unexpected status code: %d", resp.StatusCode())
+
+			if !isRetriableStatusCode(resp.StatusCode()) || attempt >= len(retryDelays) {
+				return lastErr
+			}
+
+			time.Sleep(retryDelays[attempt])
+			continue
 		}
 
 		lastErr = fmt.Errorf("send metrics batch: %w", err)
@@ -140,6 +148,19 @@ func gzipCompress(data []byte) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+func isRetriableStatusCode(statusCode int) bool {
+	switch statusCode {
+	case http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
 }
 
 func isRetriableAgentError(err error) bool {
