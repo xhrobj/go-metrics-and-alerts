@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"go.uber.org/zap"
 )
 
 // report() ставит задачу в очередь, а воркер отправляет POST с нужными заголовками.
@@ -44,20 +46,38 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	}))
 	defer server.Close()
 
+	lg := zap.NewNop()
+	cfg := config.Config{
+		ServerAddr:          server.URL,
+		PollIntervalInSec:   2,
+		ReportIntervalInSec: 10,
+		RateLimit:           5,
+		Key:                 "secret-key",
+	}
+
 	repo := repository.NewMemStorage()
 	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
 		t.Fatalf("failed to prepare test gauge metric: %v", err)
 	}
 
-	a, err := New(repo, server.URL, 2, 10, 5, "secret-key")
+	a, err := New(repo, cfg, lg)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	go a.runSendWorker()
-
 	a.pollSinceReport.Store(1)
 	a.report()
+
+	var task reportTask
+	select {
+	case task = <-a.sendQueue:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for task in sendQueue")
+	}
+
+	if err := a.sendMetrics(task.metrics); err != nil {
+		t.Fatalf("failed to send metrics: %v", err)
+	}
 
 	select {
 	case <-done:
@@ -100,20 +120,38 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	}))
 	defer server.Close()
 
+	lg := zap.NewNop()
+	cfg := config.Config{
+		ServerAddr:          server.URL,
+		PollIntervalInSec:   2,
+		ReportIntervalInSec: 10,
+		RateLimit:           5,
+		Key:                 "secret-key",
+	}
+
 	repo := repository.NewMemStorage()
 	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
 		t.Fatalf("failed to prepare test gauge metric: %v", err)
 	}
 
-	a, err := New(repo, server.URL, 2, 10, 5, "secret-key")
+	a, err := New(repo, cfg, lg)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	go a.runSendWorker()
-
 	a.pollSinceReport.Store(3)
 	a.report()
+
+	var task reportTask
+	select {
+	case task = <-a.sendQueue:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for task in sendQueue")
+	}
+
+	if err := a.sendMetrics(task.metrics); err != nil {
+		t.Fatalf("failed to send metrics: %v", err)
+	}
 
 	select {
 	case <-done:

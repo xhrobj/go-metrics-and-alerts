@@ -3,18 +3,20 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"runtime"
 
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
+	"go.uber.org/zap"
 )
 
 func (a *Agent) pollRuntime() {
 	ctx := context.Background()
 
-	log.Printf("poll runtime (%d)", a.pollSinceReport.Load())
+	a.log.Info("poll runtime",
+		zap.Int64("pollSinceReport", a.pollSinceReport.Load()),
+	)
 
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
@@ -55,11 +57,11 @@ func (a *Agent) pollRuntime() {
 func (a *Agent) pollSystem() {
 	ctx := context.Background()
 
-	log.Printf("poll system")
+	a.log.Info("poll system")
 
 	vm, err := mem.VirtualMemory()
 	if err != nil {
-		logError(fmt.Errorf("read virtual memory: %w", err))
+		a.logError(fmt.Errorf("read virtual memory: %w", err))
 		return
 	}
 
@@ -68,7 +70,7 @@ func (a *Agent) pollSystem() {
 
 	cpuPercents, err := cpu.Percent(0, true)
 	if err != nil {
-		logError(fmt.Errorf("read cpu percent: %w", err))
+		a.logError(fmt.Errorf("read cpu percent: %w", err))
 		return
 	}
 
@@ -80,6 +82,6 @@ func (a *Agent) pollSystem() {
 
 func (a *Agent) updateGauge(ctx context.Context, name string, value float64) {
 	if err := a.repo.UpdateGauge(ctx, name, value); err != nil {
-		logError(err)
+		a.logError(err)
 	}
 }

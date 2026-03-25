@@ -3,14 +3,15 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/shirou/gopsutil/v4/cpu"
+	agentConfig "github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"go.uber.org/zap"
 )
 
 // AgentStorage описывает хранилище метрик, используемое Агентом.
@@ -34,6 +35,7 @@ type Agent struct {
 	rateLimit           int
 	hashKey             string
 	client              *resty.Client
+	log                 *zap.Logger
 
 	// sendQueue - очередь задач на отправку batch-ов метрик на Сервер.
 	sendQueue chan reportTask
@@ -44,24 +46,22 @@ type Agent struct {
 }
 
 // New создаёт нового Агента с указанными параметрами конфигурации.
-func New(
-	repo AgentStorage,
-	baseURL string,
-	pollIntervalInSec int,
-	reportIntervalInSec int,
-	rateLimit int,
-	hashKey string,
-) (*Agent, error) {
-	if pollIntervalInSec <= 0 {
-		return nil, fmt.Errorf("poll interval must be > 0, got %d", pollIntervalInSec)
-	}
-	if reportIntervalInSec <= 0 {
-		return nil, fmt.Errorf("report interval must be > 0, got %d", reportIntervalInSec)
-	}
-	if rateLimit <= 0 {
-		return nil, fmt.Errorf("rate limit must be > 0, got %d", rateLimit)
+func New(repo AgentStorage, cfg agentConfig.Config, log *zap.Logger) (*Agent, error) {
+	if log == nil {
+		log = zap.NewNop()
 	}
 
+	if cfg.PollIntervalInSec <= 0 {
+		return nil, fmt.Errorf("poll interval must be > 0, got %d", cfg.PollIntervalInSec)
+	}
+	if cfg.ReportIntervalInSec <= 0 {
+		return nil, fmt.Errorf("report interval must be > 0, got %d", cfg.ReportIntervalInSec)
+	}
+	if cfg.RateLimit <= 0 {
+		return nil, fmt.Errorf("rate limit must be > 0, got %d", cfg.RateLimit)
+	}
+
+	baseURL := cfg.ServerAddr
 	if !strings.Contains(baseURL, "://") {
 		baseURL = "http://" + baseURL
 	}
@@ -69,12 +69,13 @@ func New(
 	return &Agent{
 		repo:                repo,
 		baseURL:             baseURL,
-		pollIntervalInSec:   pollIntervalInSec,
-		reportIntervalInSec: reportIntervalInSec,
-		rateLimit:           rateLimit,
-		hashKey:             hashKey,
+		pollIntervalInSec:   cfg.PollIntervalInSec,
+		reportIntervalInSec: cfg.ReportIntervalInSec,
+		rateLimit:           cfg.RateLimit,
+		hashKey:             cfg.Key,
 		client:              resty.New(),
-		sendQueue:           make(chan reportTask, rateLimit),
+		log:                 log,
+		sendQueue:           make(chan reportTask, cfg.RateLimit),
 	}, nil
 }
 
@@ -106,7 +107,7 @@ func (a *Agent) runSystemPollLoop() {
 	// NOTE: Первый вызов нужен, чтобы инициализировать базу для cpu.Percent(0, true).
 	// https://pkg.go.dev/github.com/shirou/gopsutil/v4/cpu
 	if _, err := cpu.Percent(0, true); err != nil {
-		logError(fmt.Errorf("init cpu percent: %w", err))
+		a.logError(fmt.Errorf("init cpu percent: %w", err))
 	}
 
 	for range ticker.C {
@@ -129,14 +130,14 @@ func (a *Agent) runSendWorker() {
 			// Пока задача отправлялась, runtime-сборщик уже мог накопить
 			// новые poll'ы, поэтому возвращаем старое значение через Add.
 			a.pollSinceReport.Add(task.pollCount)
-			logError(err)
+			a.logError(err)
 		}
 	}
 }
 
-func logError(err error) {
+func (a *Agent) logError(err error) {
 	if err == nil {
 		return
 	}
-	log.Printf("(×﹏×) %v", err)
+	a.log.Error("agent error", zap.Error(err))
 }

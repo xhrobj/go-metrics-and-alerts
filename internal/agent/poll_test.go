@@ -4,13 +4,24 @@ import (
 	"context"
 	"testing"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"go.uber.org/zap"
 )
 
 // pollRuntime() выставляет RandomValue, добавляет runtime-метрики.
 func TestAgent_PollRuntime_UpdatesMetrics(t *testing.T) {
+	lg := zap.NewNop()
+	cfg := config.Config{
+		ServerAddr:          "example.com:8080",
+		PollIntervalInSec:   2,
+		ReportIntervalInSec: 10,
+		RateLimit:           5,
+		Key:                 "secret-key",
+	}
 	repo := repository.NewMemStorage()
-	a, err := New(repo, "example.com:8080", 2, 10, 5, "secret-key")
+
+	a, err := New(repo, cfg, lg)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
@@ -35,9 +46,17 @@ func TestAgent_PollRuntime_UpdatesMetrics(t *testing.T) {
 
 // pollSystem() сохраняет в хранилище системные метрики.
 func TestAgent_PollSystem_StoresSystemMetrics(t *testing.T) {
+	lg := zap.NewNop()
+	cfg := config.Config{
+		ServerAddr:          "example.com:8080",
+		PollIntervalInSec:   2,
+		ReportIntervalInSec: 10,
+		RateLimit:           5,
+		Key:                 "",
+	}
 	repo := repository.NewMemStorage()
 
-	a, err := New(repo, "localhost:8080", 2, 10, 5, "")
+	a, err := New(repo, cfg, lg)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
