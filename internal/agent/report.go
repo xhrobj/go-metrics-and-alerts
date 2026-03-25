@@ -89,57 +89,11 @@ func (a *Agent) sendMetrics(ctx context.Context, metrics []model.Metrics) error 
 
 	hashValue := hash.CalcHash(compressedBody, a.hashKey)
 
-	retryDelays := []time.Duration{
-		time.Second * 1,
-		time.Second * 3,
-		time.Second * 5,
+	if err := a.postWithRetry(ctx, "/updates", compressedBody, hashValue); err != nil {
+		return fmt.Errorf("send metrics batch: %w", err)
 	}
 
-	var lastErr error
-
-	for attempt := 0; attempt <= len(retryDelays); attempt++ {
-		req := a.client.R().
-			SetContext(ctx).
-			SetHeader("Content-Type", "application/json").
-			SetHeader("Content-Encoding", "gzip")
-
-		if hashValue != "" {
-			req.SetHeader("HashSHA256", hashValue)
-		}
-
-		req.SetBody(compressedBody)
-
-		resp, err := req.Post(a.baseURL + "/updates")
-
-		if err == nil {
-			if resp.StatusCode() == http.StatusOK {
-				return nil
-			}
-
-			lastErr = fmt.Errorf("send metrics batch: unexpected status code: %d", resp.StatusCode())
-
-			if !isRetriableStatusCode(resp.StatusCode()) || attempt >= len(retryDelays) {
-				return lastErr
-			}
-
-			if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
-				return err
-			}
-			continue
-		}
-
-		lastErr = fmt.Errorf("send metrics batch: %w", err)
-
-		if !isRetriableAgentError(err) || attempt == len(retryDelays) {
-			return lastErr
-		}
-
-		if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
-			return err
-		}
-	}
-
-	return lastErr
+	return nil
 }
 
 func gzipCompress(data []byte) ([]byte, error) {
@@ -171,6 +125,61 @@ func isRetriableStatusCode(statusCode int) bool {
 	default:
 		return false
 	}
+}
+
+func (a *Agent) postWithRetry(
+	ctx context.Context,
+	path string,
+	body []byte,
+	hashValue string,
+) error {
+	retryDelays := []time.Duration{
+		time.Second * 1,
+		time.Second * 3,
+		time.Second * 5,
+	}
+
+	var lastErr error
+
+	for attempt := 0; attempt <= len(retryDelays); attempt++ {
+		req := a.client.R().
+			SetContext(ctx).
+			SetHeader("Content-Type", "application/json").
+			SetHeader("Content-Encoding", "gzip").
+			SetBody(body)
+
+		if hashValue != "" {
+			req.SetHeader("HashSHA256", hashValue)
+		}
+
+		resp, err := req.Post(a.baseURL + path)
+		if err == nil {
+			if resp.StatusCode() == http.StatusOK {
+				return nil
+			}
+
+			lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode())
+			if !isRetriableStatusCode(resp.StatusCode()) || attempt >= len(retryDelays) {
+				return lastErr
+			}
+
+			if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
+				return err
+			}
+			continue
+		}
+
+		lastErr = err
+		if !isRetriableAgentError(err) || attempt >= len(retryDelays) {
+			return lastErr
+		}
+
+		if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
+			return err
+		}
+	}
+
+	return lastErr
 }
 
 func isRetriableAgentError(err error) bool {
