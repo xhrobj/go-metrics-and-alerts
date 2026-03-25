@@ -75,7 +75,7 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 		t.Fatal("timeout waiting for task in sendQueue")
 	}
 
-	if err := a.sendMetrics(task.metrics); err != nil {
+	if err := a.sendMetrics(context.Background(), task.metrics); err != nil {
 		t.Fatalf("failed to send metrics: %v", err)
 	}
 
@@ -149,7 +149,7 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 		t.Fatal("timeout waiting for task in sendQueue")
 	}
 
-	if err := a.sendMetrics(task.metrics); err != nil {
+	if err := a.sendMetrics(context.Background(), task.metrics); err != nil {
 		t.Fatalf("failed to send metrics: %v", err)
 	}
 

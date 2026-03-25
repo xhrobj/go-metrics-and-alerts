@@ -1,7 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/agent"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
@@ -33,7 +37,10 @@ func run() error {
 		return err
 	}
 
-	a.Run()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	a.Run(ctx)
 
 	return nil
 }

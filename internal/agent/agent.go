@@ -81,26 +81,31 @@ func New(repo AgentStorage, cfg agentConfig.Config, log *zap.Logger) (*Agent, er
 
 // Run запускает независимые горутины:
 // сбор runtime-метрик, сбор системных метрик и отправку метрик на Сервер.
-func (a *Agent) Run() {
-	go a.runRuntimePollLoop()
-	go a.runSystemPollLoop()
+func (a *Agent) Run(ctx context.Context) {
+	go a.runRuntimePollLoop(ctx)
+	go a.runSystemPollLoop(ctx)
 
 	for i := 0; i < a.rateLimit; i++ {
-		go a.runSendWorker()
+		go a.runSendWorker(ctx)
 	}
 
-	a.runReportLoop()
+	a.runReportLoop(ctx)
 }
 
-func (a *Agent) runRuntimePollLoop() {
+func (a *Agent) runRuntimePollLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		a.pollRuntime()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.pollRuntime()
+		}
 	}
 }
-func (a *Agent) runSystemPollLoop() {
+func (a *Agent) runSystemPollLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
 	defer ticker.Stop()
 
@@ -110,27 +115,45 @@ func (a *Agent) runSystemPollLoop() {
 		a.logError(fmt.Errorf("init cpu percent: %w", err))
 	}
 
-	for range ticker.C {
-		a.pollSystem()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.pollSystem()
+		}
 	}
 }
 
-func (a *Agent) runReportLoop() {
+func (a *Agent) runReportLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(a.reportIntervalInSec) * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		a.report()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.report()
+		}
 	}
 }
 
-func (a *Agent) runSendWorker() {
-	for task := range a.sendQueue {
-		if err := a.sendMetrics(task.metrics); err != nil {
-			// Пока задача отправлялась, runtime-сборщик уже мог накопить
-			// новые poll'ы, поэтому возвращаем старое значение через Add.
-			a.pollSinceReport.Add(task.pollCount)
-			a.logError(err)
+func (a *Agent) runSendWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case task, ok := <-a.sendQueue:
+			if !ok {
+				return
+			}
+			if err := a.sendMetrics(ctx, task.metrics); err != nil {
+				// Пока задача отправлялась, runtime-сборщик уже мог накопить
+				// новые poll'ы, поэтому возвращаем старое значение через Add.
+				a.pollSinceReport.Add(task.pollCount)
+				a.logError(err)
+			}
 		}
 	}
 }

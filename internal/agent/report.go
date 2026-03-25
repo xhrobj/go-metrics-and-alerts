@@ -76,7 +76,7 @@ func (a *Agent) buildMetricsBatch(pollCount int64) ([]model.Metrics, error) {
 	return metrics, nil
 }
 
-func (a *Agent) sendMetrics(metrics []model.Metrics) error {
+func (a *Agent) sendMetrics(ctx context.Context, metrics []model.Metrics) error {
 	body, err := json.Marshal(metrics)
 	if err != nil {
 		return fmt.Errorf("marshal metrics batch: %w", err)
@@ -99,6 +99,7 @@ func (a *Agent) sendMetrics(metrics []model.Metrics) error {
 
 	for attempt := 0; attempt <= len(retryDelays); attempt++ {
 		req := a.client.R().
+			SetContext(ctx).
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Content-Encoding", "gzip")
 
@@ -121,7 +122,9 @@ func (a *Agent) sendMetrics(metrics []model.Metrics) error {
 				return lastErr
 			}
 
-			time.Sleep(retryDelays[attempt])
+			if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -131,7 +134,9 @@ func (a *Agent) sendMetrics(metrics []model.Metrics) error {
 			return lastErr
 		}
 
-		time.Sleep(retryDelays[attempt])
+		if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
+			return err
+		}
 	}
 
 	return lastErr
@@ -171,4 +176,16 @@ func isRetriableStatusCode(statusCode int) bool {
 func isRetriableAgentError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr)
+}
+
+func waitRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
