@@ -45,7 +45,9 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	_ = repo.UpdateGauge(context.Background(), "Alloc", 5.11)
+	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
+		t.Fatalf("failed to prepare test gauge metric: %v", err)
+	}
 
 	a, err := New(repo, server.URL, 2, 10, 5, "secret-key")
 	if err != nil {
@@ -99,7 +101,9 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	defer server.Close()
 
 	repo := repository.NewMemStorage()
-	_ = repo.UpdateGauge(context.Background(), "Alloc", 5.11)
+	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
+		t.Fatalf("failed to prepare test gauge metric: %v", err)
+	}
 
 	a, err := New(repo, server.URL, 2, 10, 5, "secret-key")
 	if err != nil {

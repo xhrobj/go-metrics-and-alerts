@@ -10,7 +10,10 @@ import (
 // pollRuntime() выставляет RandomValue, добавляет runtime-метрики.
 func TestAgent_PollRuntime_UpdatesMetrics(t *testing.T) {
 	repo := repository.NewMemStorage()
-	a, _ := New(repo, "example.com:8080", 2, 10, 5, "secret-key")
+	a, err := New(repo, "example.com:8080", 2, 10, 5, "secret-key")
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
 
 	a.pollRuntime()
 

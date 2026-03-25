@@ -90,7 +90,9 @@ func TestWithHash_SetsResponseHashHeader(t *testing.T) {
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(responseBody)
+		if _, err := w.Write(responseBody); err != nil {
+			t.Fatalf("failed to write response body: %v", err)
+		}
 	})
 
 	handler := WithHash(hashKey)(next)
