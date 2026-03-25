@@ -26,7 +26,7 @@ type reportTask struct {
 	pollCount int64
 }
 
-// Agent собирает runtime-метрики и отправляет их на сервер по HTTP.
+// Agent собирает runtime- и системные метрики и отправляет их на Сервер по HTTP.
 type Agent struct {
 	repo                AgentStorage
 	baseURL             string
@@ -37,7 +37,8 @@ type Agent struct {
 	client              *resty.Client
 	log                 *zap.Logger
 
-	// sendQueue - очередь задач на отправку batch-ов метрик на Сервер.
+	// sendQueue хранит задачи на отправку batch-ов метрик на Сервер;
+	// запись в очередь выполняет report(), чтение - worker'ы.
 	sendQueue chan reportTask
 
 	// pollSinceReport - количество вызовов pollRuntime() с момента последней
@@ -140,11 +141,13 @@ func (a *Agent) runReportLoop(ctx context.Context) {
 }
 
 func (a *Agent) runSendWorker(ctx context.Context) {
+	sendTasks := (<-chan reportTask)(a.sendQueue)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case task, ok := <-a.sendQueue:
+		case task, ok := <-sendTasks:
 			if !ok {
 				return
 			}
