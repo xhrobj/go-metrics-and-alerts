@@ -17,7 +17,9 @@ func New(h *handler.Handler, log *zap.Logger, hashKey string) http.Handler {
 
 	r.Use(chimiddleware.StripSlashes)
 	r.Use(appmiddleware.WithLogging(log))
-	r.Use(appmiddleware.WithHash(hashKey))
+	if hashKey != "" {
+		r.Use(appmiddleware.WithHash(hashKey))
+	}
 	r.Use(appmiddleware.WithGzip)
 
 	r.Get("/ping", h.Ping)
