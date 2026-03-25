@@ -88,9 +88,7 @@ func (a *Agent) Run() {
 		go a.runSendWorker()
 	}
 
-	go a.runReportLoop()
-
-	select {}
+	a.runReportLoop()
 }
 
 func (a *Agent) runRuntimePollLoop() {
