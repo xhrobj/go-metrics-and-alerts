@@ -35,9 +35,14 @@ func (a *Agent) report() {
 		return
 	}
 
-	a.sendQueue <- reportTask{
+	select {
+	case a.sendQueue <- reportTask{
 		metrics:   metrics,
 		pollCount: pollCount,
+	}:
+	default:
+		a.pollSinceReport.Add(pollCount)
+		a.log.Warn("sendQueue is full")
 	}
 }
 
