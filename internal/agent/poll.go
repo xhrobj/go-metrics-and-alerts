@@ -61,7 +61,7 @@ func (a *Agent) pollSystem() {
 
 	vm, err := mem.VirtualMemory()
 	if err != nil {
-		a.logError(fmt.Errorf("read virtual memory: %w", err))
+		a.log.Error("read virtual memory", zap.Error(err))
 		return
 	}
 
@@ -70,7 +70,7 @@ func (a *Agent) pollSystem() {
 
 	cpuPercents, err := cpu.Percent(0, true)
 	if err != nil {
-		a.logError(fmt.Errorf("read cpu percent: %w", err))
+		a.log.Error("read cpu percent", zap.Error(err))
 		return
 	}
 
@@ -82,6 +82,9 @@ func (a *Agent) pollSystem() {
 
 func (a *Agent) updateGauge(ctx context.Context, name string, value float64) {
 	if err := a.repo.UpdateGauge(ctx, name, value); err != nil {
-		a.logError(err)
+		a.log.Error("update gauge failed",
+			zap.String("metric", name),
+			zap.Error(err),
+		)
 	}
 }

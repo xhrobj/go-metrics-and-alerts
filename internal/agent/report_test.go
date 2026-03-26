@@ -70,7 +70,7 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 
 	var task reportTask
 	select {
-	case task = <-a.sendQueue:
+	case task = <-a.recvQueue:
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for task in sendQueue")
 	}
@@ -144,7 +144,7 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 
 	var task reportTask
 	select {
-	case task = <-a.sendQueue:
+	case task = <-a.recvQueue:
 	case <-time.After(time.Second):
 		t.Fatal("timeout waiting for task in sendQueue")
 	}

@@ -115,16 +115,7 @@ func gzipCompress(data []byte) ([]byte, error) {
 }
 
 func isRetriableStatusCode(statusCode int) bool {
-	switch statusCode {
-	case http.StatusTooManyRequests,
-		http.StatusInternalServerError,
-		http.StatusBadGateway,
-		http.StatusServiceUnavailable,
-		http.StatusGatewayTimeout:
-		return true
-	default:
-		return false
-	}
+	return statusCode == http.StatusTooManyRequests || (statusCode >= 500 && statusCode < 600)
 }
 
 func (a *Agent) postWithRetry(

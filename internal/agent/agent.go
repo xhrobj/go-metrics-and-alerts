@@ -37,9 +37,10 @@ type Agent struct {
 	client              *resty.Client
 	log                 *zap.Logger
 
-	// sendQueue хранит задачи на отправку batch-ов метрик на Сервер;
-	// запись в очередь выполняет report(), чтение - worker'ы.
-	sendQueue chan reportTask
+	// sendQueue используется report() для постановки задач на отправку.
+	sendQueue chan<- reportTask
+	// recvQueue используется send worker'ами для чтения задач из той же очереди.
+	recvQueue <-chan reportTask
 
 	// pollSinceReport - количество вызовов pollRuntime() с момента последней
 	// успешной отправки отчёта. Используется для формирования метрики PollCount.
@@ -67,6 +68,8 @@ func New(repo AgentStorage, cfg agentConfig.Config, log *zap.Logger) (*Agent, er
 		baseURL = "http://" + baseURL
 	}
 
+	queue := make(chan reportTask, cfg.RateLimit)
+
 	return &Agent{
 		repo:                repo,
 		baseURL:             baseURL,
@@ -76,7 +79,8 @@ func New(repo AgentStorage, cfg agentConfig.Config, log *zap.Logger) (*Agent, er
 		hashKey:             cfg.Key,
 		client:              resty.New(),
 		log:                 log,
-		sendQueue:           make(chan reportTask, cfg.RateLimit),
+		sendQueue:           queue,
+		recvQueue:           queue,
 	}, nil
 }
 
@@ -113,7 +117,7 @@ func (a *Agent) runSystemPollLoop(ctx context.Context) {
 	// NOTE: Первый вызов нужен, чтобы инициализировать базу для cpu.Percent(0, true).
 	// https://pkg.go.dev/github.com/shirou/gopsutil/v4/cpu
 	if _, err := cpu.Percent(0, true); err != nil {
-		a.logError(fmt.Errorf("init cpu percent: %w", err))
+		a.log.Error("init cpu percent", zap.Error(err))
 	}
 
 	for {
@@ -141,13 +145,11 @@ func (a *Agent) runReportLoop(ctx context.Context) {
 }
 
 func (a *Agent) runSendWorker(ctx context.Context) {
-	sendTasks := (<-chan reportTask)(a.sendQueue)
-
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case task, ok := <-sendTasks:
+		case task, ok := <-a.recvQueue:
 			if !ok {
 				return
 			}
@@ -155,15 +157,11 @@ func (a *Agent) runSendWorker(ctx context.Context) {
 				// Пока задача отправлялась, runtime-сборщик уже мог накопить
 				// новые poll'ы, поэтому возвращаем старое значение через Add.
 				a.pollSinceReport.Add(task.pollCount)
-				a.logError(err)
+				a.log.Error("send metrics failed",
+					zap.Int64("pollCount", task.pollCount),
+					zap.Error(err),
+				)
 			}
 		}
 	}
-}
-
-func (a *Agent) logError(err error) {
-	if err == nil {
-		return
-	}
-	a.log.Error("agent error", zap.Error(err))
 }
