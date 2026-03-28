@@ -7,40 +7,54 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
 
 func (a *Agent) report() {
-	if a.pollSinceReport == 0 {
+	// запомним значение и обнулим
+	pollCount := a.pollSinceReport.Swap(0)
+	if pollCount == 0 {
 		return
 	}
 
-	metrics, err := a.buildMetricsBatch()
+	metrics, err := a.buildMetricsBatch(pollCount)
 	if err != nil {
+		// метод poll() в соседней горутине мог уже подинкрементить этот счетчик,
+		// поэтому не восстановим, а добавим запомненное ранее значение обратно
+		a.pollSinceReport.Add(pollCount)
 		return
 	}
 
 	if len(metrics) == 0 {
+		a.pollSinceReport.Add(pollCount)
 		return
 	}
 
-	if err := a.sendMetrics(metrics); err != nil {
-		return
+	select {
+	case a.sendQueue <- reportTask{
+		metrics:   metrics,
+		pollCount: pollCount,
+	}:
+	default:
+		a.pollSinceReport.Add(pollCount)
+		a.log.Warn("sendQueue is full")
 	}
-
-	a.pollSinceReport = 0
 }
 
-func (a *Agent) buildMetricsBatch() ([]model.Metrics, error) {
+func (a *Agent) buildMetricsBatch(pollCount int64) ([]model.Metrics, error) {
 	gauges, _, err := a.repo.Snapshot(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("snapshot metrics: %w", err)
 	}
+
+	// Snapshot сейчас не гарантирует одномоментную согласованность всех метрик:
+	// часть gauge-метрик может быть уже обновлена другой горутиной в момент
+	// формирования batch.
 
 	metrics := make([]model.Metrics, 0, len(gauges)+1)
 
@@ -53,17 +67,16 @@ func (a *Agent) buildMetricsBatch() ([]model.Metrics, error) {
 		})
 	}
 
-	delta := int64(a.pollSinceReport)
 	metrics = append(metrics, model.Metrics{
 		ID:    "PollCount",
 		MType: model.Counter,
-		Delta: &delta,
+		Delta: &pollCount,
 	})
 
 	return metrics, nil
 }
 
-func (a *Agent) sendMetrics(metrics []model.Metrics) error {
+func (a *Agent) sendMetrics(ctx context.Context, metrics []model.Metrics) error {
 	body, err := json.Marshal(metrics)
 	if err != nil {
 		return fmt.Errorf("marshal metrics batch: %w", err)
@@ -74,38 +87,13 @@ func (a *Agent) sendMetrics(metrics []model.Metrics) error {
 		return fmt.Errorf("gzip compress metrics batch: %w", err)
 	}
 
-	retryDelays := []time.Duration{
-		time.Second * 1,
-		time.Second * 3,
-		time.Second * 5,
+	hashValue := hash.CalcHash(compressedBody, a.hashKey)
+
+	if err := a.postWithRetry(ctx, "/updates", compressedBody, hashValue); err != nil {
+		return fmt.Errorf("send metrics batch: %w", err)
 	}
 
-	var lastErr error
-
-	for attempt := 0; attempt <= len(retryDelays); attempt++ {
-		resp, err := a.client.R().
-			SetHeader("Content-Type", "application/json").
-			SetHeader("Content-Encoding", "gzip").
-			SetBody(compressedBody).
-			Post(a.baseURL + "/updates")
-
-		if err == nil {
-			if resp.StatusCode() != http.StatusOK {
-				return fmt.Errorf("send metrics batch: unexpected status code: %d", resp.StatusCode())
-			}
-			return nil
-		}
-
-		lastErr = fmt.Errorf("send metrics batch: %w", err)
-
-		if !isRetriableAgentError(err) || attempt == len(retryDelays) {
-			return lastErr
-		}
-
-		time.Sleep(retryDelays[attempt])
-	}
-
-	return lastErr
+	return nil
 }
 
 func gzipCompress(data []byte) ([]byte, error) {
@@ -126,14 +114,78 @@ func gzipCompress(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func logError(err error) {
-	if err == nil {
-		return
+func isRetriableStatusCode(statusCode int) bool {
+	return statusCode == http.StatusTooManyRequests || (statusCode >= 500 && statusCode < 600)
+}
+
+func (a *Agent) postWithRetry(
+	ctx context.Context,
+	path string,
+	body []byte,
+	hashValue string,
+) error {
+	retryDelays := []time.Duration{
+		time.Second * 1,
+		time.Second * 3,
+		time.Second * 5,
 	}
-	log.Printf("(×﹏×) %v", err)
+
+	var lastErr error
+
+	for attempt := 0; attempt <= len(retryDelays); attempt++ {
+		req := a.client.R().
+			SetContext(ctx).
+			SetHeader("Content-Type", "application/json").
+			SetHeader("Content-Encoding", "gzip").
+			SetBody(body)
+
+		if hashValue != "" {
+			req.SetHeader("HashSHA256", hashValue)
+		}
+
+		resp, err := req.Post(a.baseURL + path)
+		if err == nil {
+			if resp.StatusCode() == http.StatusOK {
+				return nil
+			}
+
+			lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode())
+			if !isRetriableStatusCode(resp.StatusCode()) || attempt >= len(retryDelays) {
+				return lastErr
+			}
+
+			if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
+				return err
+			}
+			continue
+		}
+
+		lastErr = err
+		if !isRetriableAgentError(err) || attempt >= len(retryDelays) {
+			return lastErr
+		}
+
+		if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
+			return err
+		}
+	}
+
+	return lastErr
 }
 
 func isRetriableAgentError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr)
+}
+
+func waitRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

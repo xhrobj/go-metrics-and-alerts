@@ -2,48 +2,89 @@ package agent
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"math/rand"
 	"runtime"
+
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
+	"go.uber.org/zap"
 )
 
-func (a *Agent) poll() {
-	log.Printf("poll (%d)", a.pollSinceReport)
+func (a *Agent) pollRuntime() {
+	ctx := context.Background()
+
+	a.log.Info("poll runtime",
+		zap.Int64("pollSinceReport", a.pollSinceReport.Load()),
+	)
 
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 
+	a.updateGauge(ctx, "Alloc", float64(ms.Alloc))
+	a.updateGauge(ctx, "BuckHashSys", float64(ms.BuckHashSys))
+	a.updateGauge(ctx, "Frees", float64(ms.Frees))
+	a.updateGauge(ctx, "GCCPUFraction", float64(ms.GCCPUFraction))
+	a.updateGauge(ctx, "GCSys", float64(ms.GCSys))
+	a.updateGauge(ctx, "HeapAlloc", float64(ms.HeapAlloc))
+	a.updateGauge(ctx, "HeapIdle", float64(ms.HeapIdle))
+	a.updateGauge(ctx, "HeapInuse", float64(ms.HeapInuse))
+	a.updateGauge(ctx, "HeapObjects", float64(ms.HeapObjects))
+	a.updateGauge(ctx, "HeapReleased", float64(ms.HeapReleased))
+	a.updateGauge(ctx, "HeapSys", float64(ms.HeapSys))
+	a.updateGauge(ctx, "LastGC", float64(ms.LastGC))
+	a.updateGauge(ctx, "Lookups", float64(ms.Lookups))
+	a.updateGauge(ctx, "MCacheInuse", float64(ms.MCacheInuse))
+	a.updateGauge(ctx, "MCacheSys", float64(ms.MCacheSys))
+	a.updateGauge(ctx, "MSpanInuse", float64(ms.MSpanInuse))
+	a.updateGauge(ctx, "MSpanSys", float64(ms.MSpanSys))
+	a.updateGauge(ctx, "Mallocs", float64(ms.Mallocs))
+	a.updateGauge(ctx, "NextGC", float64(ms.NextGC))
+	a.updateGauge(ctx, "NumForcedGC", float64(ms.NumForcedGC))
+	a.updateGauge(ctx, "NumGC", float64(ms.NumGC))
+	a.updateGauge(ctx, "OtherSys", float64(ms.OtherSys))
+	a.updateGauge(ctx, "PauseTotalNs", float64(ms.PauseTotalNs))
+	a.updateGauge(ctx, "StackInuse", float64(ms.StackInuse))
+	a.updateGauge(ctx, "StackSys", float64(ms.StackSys))
+	a.updateGauge(ctx, "Sys", float64(ms.Sys))
+	a.updateGauge(ctx, "TotalAlloc", float64(ms.TotalAlloc))
+
+	a.updateGauge(ctx, "RandomValue", rand.Float64())
+
+	a.pollSinceReport.Add(1)
+}
+
+func (a *Agent) pollSystem() {
 	ctx := context.Background()
 
-	_ = a.repo.UpdateGauge(ctx, "Alloc", float64(ms.Alloc))
-	_ = a.repo.UpdateGauge(ctx, "BuckHashSys", float64(ms.BuckHashSys))
-	_ = a.repo.UpdateGauge(ctx, "Frees", float64(ms.Frees))
-	_ = a.repo.UpdateGauge(ctx, "GCCPUFraction", float64(ms.GCCPUFraction))
-	_ = a.repo.UpdateGauge(ctx, "GCSys", float64(ms.GCSys))
-	_ = a.repo.UpdateGauge(ctx, "HeapAlloc", float64(ms.HeapAlloc))
-	_ = a.repo.UpdateGauge(ctx, "HeapIdle", float64(ms.HeapIdle))
-	_ = a.repo.UpdateGauge(ctx, "HeapInuse", float64(ms.HeapInuse))
-	_ = a.repo.UpdateGauge(ctx, "HeapObjects", float64(ms.HeapObjects))
-	_ = a.repo.UpdateGauge(ctx, "HeapReleased", float64(ms.HeapReleased))
-	_ = a.repo.UpdateGauge(ctx, "HeapSys", float64(ms.HeapSys))
-	_ = a.repo.UpdateGauge(ctx, "LastGC", float64(ms.LastGC))
-	_ = a.repo.UpdateGauge(ctx, "Lookups", float64(ms.Lookups))
-	_ = a.repo.UpdateGauge(ctx, "MCacheInuse", float64(ms.MCacheInuse))
-	_ = a.repo.UpdateGauge(ctx, "MCacheSys", float64(ms.MCacheSys))
-	_ = a.repo.UpdateGauge(ctx, "MSpanInuse", float64(ms.MSpanInuse))
-	_ = a.repo.UpdateGauge(ctx, "MSpanSys", float64(ms.MSpanSys))
-	_ = a.repo.UpdateGauge(ctx, "Mallocs", float64(ms.Mallocs))
-	_ = a.repo.UpdateGauge(ctx, "NextGC", float64(ms.NextGC))
-	_ = a.repo.UpdateGauge(ctx, "NumForcedGC", float64(ms.NumForcedGC))
-	_ = a.repo.UpdateGauge(ctx, "NumGC", float64(ms.NumGC))
-	_ = a.repo.UpdateGauge(ctx, "OtherSys", float64(ms.OtherSys))
-	_ = a.repo.UpdateGauge(ctx, "PauseTotalNs", float64(ms.PauseTotalNs))
-	_ = a.repo.UpdateGauge(ctx, "StackInuse", float64(ms.StackInuse))
-	_ = a.repo.UpdateGauge(ctx, "StackSys", float64(ms.StackSys))
-	_ = a.repo.UpdateGauge(ctx, "Sys", float64(ms.Sys))
-	_ = a.repo.UpdateGauge(ctx, "TotalAlloc", float64(ms.TotalAlloc))
+	a.log.Info("poll system")
 
-	_ = a.repo.UpdateGauge(ctx, "RandomValue", rand.Float64())
+	vm, err := mem.VirtualMemory()
+	if err != nil {
+		a.log.Error("read virtual memory", zap.Error(err))
+		return
+	}
 
-	a.pollSinceReport++
+	a.updateGauge(ctx, "TotalMemory", float64(vm.Total))
+	a.updateGauge(ctx, "FreeMemory", float64(vm.Free))
+
+	cpuPercents, err := cpu.Percent(0, true)
+	if err != nil {
+		a.log.Error("read cpu percent", zap.Error(err))
+		return
+	}
+
+	for i, percent := range cpuPercents {
+		name := fmt.Sprintf("CPUutilization%d", i+1)
+		a.updateGauge(ctx, name, percent)
+	}
+}
+
+func (a *Agent) updateGauge(ctx context.Context, name string, value float64) {
+	if err := a.repo.UpdateGauge(ctx, name, value); err != nil {
+		a.log.Error("update gauge failed",
+			zap.String("metric", name),
+			zap.Error(err),
+		)
+	}
 }

@@ -7,14 +7,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"go.uber.org/zap"
 )
 
-// report() делает POST и выставляет требуемый Content-Type
+// report() ставит задачу в очередь, а воркер отправляет POST с нужными заголовками.
 func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	requests := 0
+	done := make(chan struct{}, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
@@ -38,26 +42,62 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
+		done <- struct{}{}
 	}))
 	defer server.Close()
 
-	repo := repository.NewMemStorage()
-	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
+	lg := zap.NewNop()
+	cfg := config.Config{
+		ServerAddr:          server.URL,
+		PollIntervalInSec:   2,
+		ReportIntervalInSec: 10,
+		RateLimit:           5,
+		Key:                 "secret-key",
+	}
 
-	a, _ := New(repo, server.URL, 2, 10)
-	a.pollSinceReport = 1
+	repo := repository.NewMemStorage()
+	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
+		t.Fatalf("failed to prepare test gauge metric: %v", err)
+	}
+
+	a, err := New(repo, cfg, lg)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	a.pollSinceReport.Store(1)
 	a.report()
+
+	var task reportTask
+	select {
+	case task = <-a.recvQueue:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for task in sendQueue")
+	}
+
+	if err := a.sendMetrics(context.Background(), task.metrics); err != nil {
+		t.Fatalf("failed to send metrics: %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for request")
+	}
 
 	if requests != 1 {
 		t.Fatalf("expected 1 requests, got %d", requests)
 	}
 }
 
-// report() отправляет корректные JSON-метрики на /updates
+// report() ставит в очередь batch, а воркер отправляет корректные JSON-метрики на /updates.
 func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	var metrics []model.Metrics
+	done := make(chan struct{}, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() { done <- struct{}{} }()
+
 		if r.URL.Path != "/updates" {
 			t.Fatalf("expected path /updates, got %q", r.URL.Path)
 		}
@@ -80,12 +120,44 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	}))
 	defer server.Close()
 
-	repo := repository.NewMemStorage()
-	repo.UpdateGauge(context.Background(), "Alloc", 5.11)
+	lg := zap.NewNop()
+	cfg := config.Config{
+		ServerAddr:          server.URL,
+		PollIntervalInSec:   2,
+		ReportIntervalInSec: 10,
+		RateLimit:           5,
+		Key:                 "secret-key",
+	}
 
-	a, _ := New(repo, server.URL, 2, 10)
-	a.pollSinceReport = 3
+	repo := repository.NewMemStorage()
+	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
+		t.Fatalf("failed to prepare test gauge metric: %v", err)
+	}
+
+	a, err := New(repo, cfg, lg)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	a.pollSinceReport.Store(3)
 	a.report()
+
+	var task reportTask
+	select {
+	case task = <-a.recvQueue:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for task in sendQueue")
+	}
+
+	if err := a.sendMetrics(context.Background(), task.metrics); err != nil {
+		t.Fatalf("failed to send metrics: %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for request")
+	}
 
 	if len(metrics) != 2 {
 		t.Fatalf("expected 2 metrics, got %d", len(metrics))
@@ -130,7 +202,7 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 		t.Error("expected counter metric PollCount to be sent")
 	}
 
-	if a.pollSinceReport != 0 {
-		t.Errorf("expected pollSinceReport to be reset to 0, got %d", a.pollSinceReport)
+	if a.pollSinceReport.Load() != 0 {
+		t.Errorf("expected pollSinceReport to be reset to 0, got %d", a.pollSinceReport.Load())
 	}
 }

@@ -12,11 +12,14 @@ import (
 
 // New создаёт и настраивает HTTP-роутер:
 // регистрирует маршруты и подключает middleware.
-func New(h *handler.Handler, log *zap.Logger) http.Handler {
+func New(h *handler.Handler, log *zap.Logger, hashKey string) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.StripSlashes)
 	r.Use(appmiddleware.WithLogging(log))
+	if hashKey != "" {
+		r.Use(appmiddleware.WithHash(hashKey))
+	}
 	r.Use(appmiddleware.WithGzip)
 
 	r.Get("/ping", h.Ping)

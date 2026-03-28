@@ -105,7 +105,7 @@ func run() error {
 	}
 
 	h := handler.New(svc, db)
-	r := router.New(h, lg)
+	r := router.New(h, lg, cfg.Key)
 
 	lg.Info("running server",
 		zap.String("address", cfg.ServerAddr),

@@ -12,8 +12,8 @@ import (
 // GetAgentConfig возвращает конфигурацию агента.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -p -r
-//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL.
+//   - флаги: -a -p -r -l -k
+//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL, RATE_LIMIT, KEY
 //
 // Приоритет источников: env > flag > default.
 func GetAgentConfig() (agentConfig.Config, error) {
@@ -22,10 +22,12 @@ func GetAgentConfig() (agentConfig.Config, error) {
 	flag.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address of the HTTP server (host:port)")
 	flag.IntVar(&cfg.PollIntervalInSec, "p", 2, "runtime metrics polling interval in seconds")
 	flag.IntVar(&cfg.ReportIntervalInSec, "r", 10, "metrics reporting interval in seconds")
+	flag.IntVar(&cfg.RateLimit, "l", 5, "limit of simultaneous outgoing requests")
+	flag.StringVar(&cfg.Key, "k", "", "hash key for request signing")
 
 	flag.Parse()
 
-	if serverAddr := os.Getenv("ADDRESS"); serverAddr != "" {
+	if serverAddr, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.ServerAddr = serverAddr
 	}
 
@@ -41,14 +43,24 @@ func GetAgentConfig() (agentConfig.Config, error) {
 		cfg.ReportIntervalInSec = reportIntervalInSec
 	}
 
+	if rateLimit, ok, err := getEnvInt("RATE_LIMIT"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.RateLimit = rateLimit
+	}
+
+	if key, ok := os.LookupEnv("KEY"); ok {
+		cfg.Key = key
+	}
+
 	return cfg, nil
 }
 
 // GetServerConfig возвращает конфигурацию HTTP-сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -i -f -r -d
-//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN
+//   - флаги: -a -i -f -r -d -k
+//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY
 //
 // Приоритет источников: env > flag > default.
 func GetServerConfig() (serverConfig.Config, error) {
@@ -59,10 +71,11 @@ func GetServerConfig() (serverConfig.Config, error) {
 	flag.StringVar(&cfg.FileStoragePath, "f", "metrics-db.json", "path to metrics storage file")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file on startup")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database connection string")
+	flag.StringVar(&cfg.Key, "k", "", "hash key for request signing")
 
 	flag.Parse()
 
-	if serverAddr := os.Getenv("ADDRESS"); serverAddr != "" {
+	if serverAddr, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.ServerAddr = serverAddr
 	}
 
@@ -72,7 +85,7 @@ func GetServerConfig() (serverConfig.Config, error) {
 		cfg.StoreIntervalInSec = storeIntervalInSec
 	}
 
-	if fileStoragePath := os.Getenv("FILE_STORAGE_PATH"); fileStoragePath != "" {
+	if fileStoragePath, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
 		cfg.FileStoragePath = fileStoragePath
 	}
 
@@ -82,15 +95,19 @@ func GetServerConfig() (serverConfig.Config, error) {
 		cfg.Restore = restore
 	}
 
-	if databaseDSN := os.Getenv("DATABASE_DSN"); databaseDSN != "" {
+	if databaseDSN, ok := os.LookupEnv("DATABASE_DSN"); ok {
 		cfg.DatabaseDSN = databaseDSN
+	}
+
+	if key, ok := os.LookupEnv("KEY"); ok {
+		cfg.Key = key
 	}
 
 	return cfg, nil
 }
 
 func getEnvInt(name string) (int, bool, error) {
-	if v := os.Getenv(name); v != "" {
+	if v, ok := os.LookupEnv(name); ok {
 		i, err := strconv.Atoi(v)
 		if err != nil {
 			return 0, false, err
@@ -101,7 +118,7 @@ func getEnvInt(name string) (int, bool, error) {
 }
 
 func getEnvBool(name string) (bool, bool, error) {
-	if v := os.Getenv(name); v != "" {
+	if v, ok := os.LookupEnv(name); ok {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
 			return false, false, err
