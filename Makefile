@@ -54,7 +54,7 @@ postgres-stop:
 	docker stop metrics-postgres
 
 postgres-rm:
-	docker rm metrics-postgres
+	docker rm -f metrics-postgres
 
 postgres-connect:
 	docker exec -it metrics-postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
