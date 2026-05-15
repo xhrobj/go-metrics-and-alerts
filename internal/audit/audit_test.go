@@ -19,6 +19,26 @@ func (m *mockObserver) Notify(ctx context.Context, event Event) error {
 	return m.err
 }
 
+func assertAuditEvent(t *testing.T, got, want Event) {
+	t.Helper()
+
+	if got.TS != want.TS {
+		t.Errorf("got TS %d, want %d", got.TS, want.TS)
+	}
+	if got.IPAddress != want.IPAddress {
+		t.Errorf("got IPAddress %q, want %q", got.IPAddress, want.IPAddress)
+	}
+	if len(got.Metrics) != len(want.Metrics) {
+		t.Fatalf("got metrics len %d, want %d", len(got.Metrics), len(want.Metrics))
+	}
+
+	for i := range want.Metrics {
+		if got.Metrics[i] != want.Metrics[i] {
+			t.Errorf("got metric %q, want %q", got.Metrics[i], want.Metrics[i])
+		}
+	}
+}
+
 // Notify рассылает событие всем подписанным Observer-ам.
 func TestAuditor_Notify_OK(t *testing.T) {
 	event := Event{

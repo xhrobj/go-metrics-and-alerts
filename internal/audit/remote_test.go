@@ -46,21 +46,7 @@ func TestRemoteObserver_Notify_SendsEvent_OK(t *testing.T) {
 
 	got := <-events
 
-	if got.TS != event.TS {
-		t.Errorf("got TS %d, want %d", got.TS, event.TS)
-	}
-	if got.IPAddress != event.IPAddress {
-		t.Errorf("got IPAddress %q, want %q", got.IPAddress, event.IPAddress)
-	}
-	if len(got.Metrics) != len(event.Metrics) {
-		t.Fatalf("got metrics len %d, want %d", len(got.Metrics), len(event.Metrics))
-	}
-
-	for i := range event.Metrics {
-		if got.Metrics[i] != event.Metrics[i] {
-			t.Errorf("got metric %q, want %q", got.Metrics[i], event.Metrics[i])
-		}
-	}
+	assertAuditEvent(t, got, event)
 }
 
 // Notify считает успешной отправку аудита, если удалённый приёмник вернул 2xx-статус.

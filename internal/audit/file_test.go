@@ -55,22 +55,7 @@ func TestFileObserver_Notify_CreatesFileAndWritesEvent_OK(t *testing.T) {
 		t.Fatalf("got events len %d, want %d", len(events), 1)
 	}
 
-	got := events[0]
-	if got.TS != event.TS {
-		t.Errorf("got TS %d, want %d", got.TS, event.TS)
-	}
-	if got.IPAddress != event.IPAddress {
-		t.Errorf("got IPAddress %q, want %q", got.IPAddress, event.IPAddress)
-	}
-	if len(got.Metrics) != len(event.Metrics) {
-		t.Fatalf("got metrics len %d, want %d", len(got.Metrics), len(event.Metrics))
-	}
-
-	for i := range event.Metrics {
-		if got.Metrics[i] != event.Metrics[i] {
-			t.Errorf("got metric %q, want %q", got.Metrics[i], event.Metrics[i])
-		}
-	}
+	assertAuditEvent(t, events[0], event)
 }
 
 // Notify добавляет новое событие в конец существующего файла аудита.
@@ -102,12 +87,8 @@ func TestFileObserver_Notify_AppendsEvent_OK(t *testing.T) {
 		t.Fatalf("got events len %d, want %d", len(events), 2)
 	}
 
-	if events[0].TS != firstEvent.TS {
-		t.Errorf("got first TS %d, want %d", events[0].TS, firstEvent.TS)
-	}
-	if events[1].TS != secondEvent.TS {
-		t.Errorf("got second TS %d, want %d", events[1].TS, secondEvent.TS)
-	}
+	assertAuditEvent(t, events[0], firstEvent)
+	assertAuditEvent(t, events[1], secondEvent)
 }
 
 // Notify возвращает ошибку, если контекст уже отменён.
