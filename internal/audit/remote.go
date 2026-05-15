@@ -31,8 +31,9 @@ func NewRemoteObserver(url string) *RemoteObserver {
 // Notify отправляет событие аудита POST-запросом в формате JSON.
 //
 // Успешной считается отправка, при которой удалённый приёмник вернул 2xx-статус.
+// HTTP-клиент использует внутренний таймаут defaultAuditTimeout.
 // Контекст используется для отмены запроса, например при остановке Сервера
-// или истечении внешнего таймаута.
+// или отмене входящего HTTP-запроса.
 func (o *RemoteObserver) Notify(ctx context.Context, event Event) error {
 	select {
 	case <-ctx.Done():

@@ -118,6 +118,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.notifyAudit(r, []string{metricName})
+
 	// success
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -168,12 +170,6 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			Value: metric.Value,
 		}
 
-		// writeMetricJSON(w, http.StatusOK, model.Metrics{
-		// 	ID:    metric.ID,
-		// 	MType: model.Gauge,
-		// 	Value: metric.Value,
-		// })
-
 	case model.Counter:
 		total, err := h.service.UpdateCounter(ctx, metric.ID, *metric.Delta)
 		if err != nil {
@@ -186,12 +182,6 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			MType: model.Counter,
 			Delta: &total,
 		}
-
-		// writeMetricJSON(w, http.StatusOK, model.Metrics{
-		// 	ID:    metric.ID,
-		// 	MType: model.Counter,
-		// 	Delta: &total,
-		// })
 
 	default:
 		// NOTE: защитная ветка - validateMetric уже должен был отфильтровать некорректный тип
