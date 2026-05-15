@@ -601,6 +601,12 @@ Content-Type: application/json
 
 ---
 
+## Спринт 5
+
+Спринт 5 был посвящён проекту [**(^.^)~ Gophermart**](https://github.com/xhrobj/gophermart).
+
+---
+
 ## Спринт 6
 
 ### Инкремент 16

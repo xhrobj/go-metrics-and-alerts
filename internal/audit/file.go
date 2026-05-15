@@ -8,17 +8,20 @@ import (
 	"sync"
 )
 
+// FileObserver записывает события аудита в файл.
 type FileObserver struct {
 	path string
 	mu   sync.Mutex
 }
 
+// NewFileObserver создаёт Observer для записи событий аудита в файл.
 func NewFileObserver(path string) *FileObserver {
 	return &FileObserver{
 		path: path,
 	}
 }
 
+// Notify записывает событие аудита отдельной JSON-строкой в конец файла.
 func (o *FileObserver) Notify(ctx context.Context, event Event) error {
 	select {
 	case <-ctx.Done():
@@ -26,7 +29,6 @@ func (o *FileObserver) Notify(ctx context.Context, event Event) error {
 	default:
 	}
 
-	// !!!: защитим параллельные записи
 	o.mu.Lock()
 	defer o.mu.Unlock()
 

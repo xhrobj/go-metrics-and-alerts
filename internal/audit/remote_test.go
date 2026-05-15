@@ -9,6 +9,7 @@ import (
 	"testing"
 )
 
+// Notify отправляет событие аудита POST-запросом в формате JSON.
 func TestRemoteObserver_Notify_SendsEvent_OK(t *testing.T) {
 	event := Event{
 		TS:        123,
@@ -62,6 +63,7 @@ func TestRemoteObserver_Notify_SendsEvent_OK(t *testing.T) {
 	}
 }
 
+// Notify считает успешной отправку аудита, если удалённый приёмник вернул 2xx-статус.
 func TestRemoteObserver_Notify_Accepts2xxStatus_OK(t *testing.T) {
 	statuses := []int{
 		http.StatusOK,
@@ -84,6 +86,7 @@ func TestRemoteObserver_Notify_Accepts2xxStatus_OK(t *testing.T) {
 	}
 }
 
+// Notify возвращает ошибку, если удалённый приёмник вернул не 2xx-статус.
 func TestRemoteObserver_Notify_Non2xxStatus_ReturnsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -99,6 +102,7 @@ func TestRemoteObserver_Notify_Non2xxStatus_ReturnsError(t *testing.T) {
 	}
 }
 
+// Notify возвращает ошибку, если контекст уже отменён.
 func TestRemoteObserver_Notify_CanceledContext_ReturnsError(t *testing.T) {
 	observer := NewRemoteObserver("http://example.com/audit")
 
@@ -112,6 +116,7 @@ func TestRemoteObserver_Notify_CanceledContext_ReturnsError(t *testing.T) {
 	}
 }
 
+// Notify возвращает ошибку, если URL удалённого приёмника некорректный.
 func TestRemoteObserver_Notify_InvalidURL_ReturnsError(t *testing.T) {
 	observer := NewRemoteObserver("://bad-url")
 

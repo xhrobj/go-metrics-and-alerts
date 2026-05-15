@@ -10,6 +10,7 @@ import (
 	"testing"
 )
 
+// readAuditEvents читает файл аудита в формате JSON Lines и возвращает события аудита.
 func readAuditEvents(t *testing.T, path string) []Event {
 	t.Helper()
 
@@ -33,6 +34,7 @@ func readAuditEvents(t *testing.T, path string) []Event {
 	return events
 }
 
+// Notify создаёт файл аудита и записывает событие отдельной JSON-строкой.
 func TestFileObserver_Notify_CreatesFileAndWritesEvent_OK(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
 	observer := NewFileObserver(path)
@@ -71,6 +73,7 @@ func TestFileObserver_Notify_CreatesFileAndWritesEvent_OK(t *testing.T) {
 	}
 }
 
+// Notify добавляет новое событие в конец существующего файла аудита.
 func TestFileObserver_Notify_AppendsEvent_OK(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
 	observer := NewFileObserver(path)
@@ -107,6 +110,7 @@ func TestFileObserver_Notify_AppendsEvent_OK(t *testing.T) {
 	}
 }
 
+// Notify возвращает ошибку, если контекст уже отменён.
 func TestFileObserver_Notify_CanceledContext_ReturnsError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
 	observer := NewFileObserver(path)
@@ -121,6 +125,7 @@ func TestFileObserver_Notify_CanceledContext_ReturnsError(t *testing.T) {
 	}
 }
 
+// Notify возвращает ошибку, если файл аудита невозможно открыть.
 func TestFileObserver_Notify_OpenFileError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing", "audit.log")
 	observer := NewFileObserver(path)

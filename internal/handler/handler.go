@@ -6,12 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"go.uber.org/zap"
 )
 
 // Service описывает бизнес-логику работы с метриками,
@@ -28,10 +32,17 @@ type Service interface {
 	Snapshot(context.Context) (map[string]float64, map[string]int64, error)
 }
 
+// Auditor описывает диспетчер событий аудита.
+type Auditor interface {
+	Notify(context.Context, audit.Event) error
+}
+
 // Handler обрабатывает HTTP-запросы, связанные с метриками.
 type Handler struct {
 	service Service
 	db      *sql.DB
+	auditor Auditor
+	log     *zap.Logger
 }
 
 // New создаёт новый Handler, использующий переданный сервис метрик и соединение с БД
@@ -40,6 +51,12 @@ func New(service Service, db *sql.DB) *Handler {
 		service: service,
 		db:      db,
 	}
+}
+
+// EnableAudit подключает аудит успешной обработки метрик.
+func (h *Handler) EnableAudit(auditor Auditor, log *zap.Logger) {
+	h.auditor = auditor
+	h.log = log
 }
 
 // Update принимает метрику на хранение.
@@ -136,6 +153,8 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var response model.Metrics
+
 	switch metric.MType {
 	case model.Gauge:
 		if err := h.service.UpdateGauge(ctx, metric.ID, *metric.Value); err != nil {
@@ -143,11 +162,17 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeMetricJSON(w, http.StatusOK, model.Metrics{
+		response = model.Metrics{
 			ID:    metric.ID,
 			MType: model.Gauge,
 			Value: metric.Value,
-		})
+		}
+
+		// writeMetricJSON(w, http.StatusOK, model.Metrics{
+		// 	ID:    metric.ID,
+		// 	MType: model.Gauge,
+		// 	Value: metric.Value,
+		// })
 
 	case model.Counter:
 		total, err := h.service.UpdateCounter(ctx, metric.ID, *metric.Delta)
@@ -156,17 +181,26 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeMetricJSON(w, http.StatusOK, model.Metrics{
+		response = model.Metrics{
 			ID:    metric.ID,
 			MType: model.Counter,
 			Delta: &total,
-		})
+		}
+
+		// writeMetricJSON(w, http.StatusOK, model.Metrics{
+		// 	ID:    metric.ID,
+		// 	MType: model.Counter,
+		// 	Delta: &total,
+		// })
 
 	default:
 		// NOTE: защитная ветка - validateMetric уже должен был отфильтровать некорректный тип
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	h.notifyAudit(r, []string{metric.ID})
+	writeMetricJSON(w, http.StatusOK, response)
 }
 
 // UpdatesJSON принимает набор метрик на хранение.
@@ -205,6 +239,8 @@ func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	h.notifyAudit(r, metricIDs(metrics))
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -391,4 +427,41 @@ func writeMetricJSON(w http.ResponseWriter, status int, metric model.Metrics) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(metric)
+}
+
+func (h *Handler) notifyAudit(r *http.Request, metrics []string) {
+	if h.auditor == nil || len(metrics) == 0 {
+		return
+	}
+
+	event := audit.Event{
+		TS:        time.Now().Unix(),
+		Metrics:   metrics,
+		IPAddress: clientIP(r),
+	}
+
+	if err := h.auditor.Notify(r.Context(), event); err != nil && h.log != nil {
+		h.log.Error("audit failed", zap.Error(err))
+	}
+}
+
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+
+	return host
+}
+
+func metricIDs(metrics []model.Metrics) []string {
+	ids := make([]string, 0, len(metrics))
+
+	for _, metric := range metrics {
+		if metric.ID != "" {
+			ids = append(ids, metric.ID)
+		}
+	}
+
+	return ids
 }

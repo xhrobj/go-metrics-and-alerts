@@ -20,15 +20,16 @@ vendor/
 
 #runtime data
 **/metrics-db.json
+/*.log
 
 # IDEs directories
-.idea
-.vscode
+.idea/
+.vscode/
 
 #macOS
 .DS_Store
 __MACOSX/
 
-#tmp files
+# tmp files
 sandbox/
 tools/

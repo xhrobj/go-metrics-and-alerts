@@ -9,6 +9,7 @@ import (
 
 	"database/sql"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
@@ -104,7 +105,22 @@ func run() error {
 		}
 	}
 
+	var auditDispatcher *audit.Auditor
+
+	if cfg.AuditFile != "" || cfg.AuditURL != "" {
+		auditDispatcher = audit.NewAuditor()
+
+		if cfg.AuditFile != "" {
+			auditDispatcher.Subscribe(audit.NewFileObserver(cfg.AuditFile))
+		}
+
+		if cfg.AuditURL != "" {
+			auditDispatcher.Subscribe(audit.NewRemoteObserver(cfg.AuditURL))
+		}
+	}
+
 	h := handler.New(svc, db)
+	h.EnableAudit(auditDispatcher, lg)
 	r := router.New(h, lg, cfg.Key)
 
 	lg.Info("running server",
