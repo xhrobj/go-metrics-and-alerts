@@ -667,10 +667,75 @@ pprof -top -diff_base=profiles/base.pprof profiles/result.pprof
 
 **Задачи**
 
-- #54. Добавить бенчмарки для выбранных компонентов системы
+- #54. Добавить бенчмарки для выбранных компонентов системы (хранилища метрик и HTTP-обработчиков)
 - #55. Снять базовый профиль памяти `profiles/base.pprof`
 - #56. Оптимизировать лишние аллокации, которые будут найдены через `pprof`
 - #57. Снять повторный профиль памяти `profiles/result.pprof` и сравнить его с базовым
-- #58. Зафиксировать результаты benchmark'ов и профилирования
+- #58. Зафиксировать результаты benchmark'ов и профилирования в README
+
+**Результаты**
+
+Добавлены бенчмарки для выбранных компонентов системы:
+
+- `BenchmarkMemStorage_UpdateMetrics`
+- `BenchmarkMemStorage_Snapshot`
+- `BenchmarkHandler_UpdateJSON`
+- `BenchmarkHandler_UpdatesJSON`
+
+Для запуска бенчмарков использовалась команда:
+
+```bash
+go test -bench=. -benchmem ./internal/repository ./internal/handler
+```
+
+Основной сценарий для оптимизации - batch-обработчик `/updates`.
+
+До оптимизации:
+
+```text
+BenchmarkHandler_UpdatesJSON-8 56247 21283 ns/op 18150 B/op
+```
+
+Базовый профиль памяти был снят командой:
+
+```bash
+go test -run=^$ \
+  -bench=BenchmarkHandler_UpdatesJSON \
+  -benchmem \
+  -benchtime=100000x \
+  -memprofilerate=1 \
+  -memprofile=profiles/base.pprof \
+  ./internal/handler
+```
+
+В базовом профиле была найдена лишняя аллокация в `handler.metricIDs`: список имён метрик создавался даже при выключенном аудите.
+
+После оптимизации `metricIDs` вызывается только если аудит действительно включен. Затем был снят повторный профиль памяти `profiles/result.pprof`
+
+Результат после оптимизации:
+
+```text
+BenchmarkHandler_UpdatesJSON-8 56540 21235 ns/op 17638 B/op
+```
+
+Сравнение профилей:
+
+```bash
+go tool pprof -top -alloc_space -diff_base=profiles/base.pprof profiles/result.pprof
+```
+
+Результат сравнения:
+
+```text
+flat       flat%   sum%    cum        cum%
+-48.83MB   2.82%   2.82%   -48.83MB   2.82%  github.com/xhrobj/go-metrics-and-alerts/internal/handler.metricIDs
+```
+
+После оптимизации на `100000` batch-запросов убрано около `48.83MB` лишних аллокаций. В бенчмарке это соответствует уменьшению памяти и количества аллокаций:
+
+```text
+до:    18150 B/op    131 allocs/op
+после: 17638 B/op    130 allocs/op
+```
 
 ---
