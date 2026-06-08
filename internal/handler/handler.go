@@ -118,7 +118,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.notifyAudit(r, []string{metricName})
+	h.notifyAuditMetric(r, metricName)
 
 	// success
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -189,7 +189,7 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.notifyAudit(r, []string{metric.ID})
+	h.notifyAuditMetric(r, metric.ID)
 	writeMetricJSON(w, http.StatusOK, response)
 }
 
@@ -230,7 +230,7 @@ func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.notifyAudit(r, metricIDs(metrics))
+	h.notifyAuditMetrics(r, metrics)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -417,6 +417,22 @@ func writeMetricJSON(w http.ResponseWriter, status int, metric model.Metrics) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(metric)
+}
+
+func (h *Handler) notifyAuditMetric(r *http.Request, metricName string) {
+	if h.auditor == nil || metricName == "" {
+		return
+	}
+
+	h.notifyAudit(r, []string{metricName})
+}
+
+func (h *Handler) notifyAuditMetrics(r *http.Request, metrics []model.Metrics) {
+	if h.auditor == nil || len(metrics) == 0 {
+		return
+	}
+
+	h.notifyAudit(r, metricIDs(metrics))
 }
 
 func (h *Handler) notifyAudit(r *http.Request, metrics []string) {
