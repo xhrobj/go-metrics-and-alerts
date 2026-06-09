@@ -128,7 +128,9 @@ func WithGzip(h http.Handler) http.Handler {
 
 			// После выполнения хендлера нужно закрыть gzip.Writer,
 			// чтобы отправить все данные из буфера
-			defer cw.Close()
+			defer func() {
+				_ = cw.Close()
+			}()
 		}
 
 		// проверяем, прислал ли клиент сжатое тело запроса
@@ -144,7 +146,9 @@ func WithGzip(h http.Handler) http.Handler {
 
 			r.Body = cr
 
-			defer cr.Close()
+			defer func() {
+				_ = cr.Close()
+			}()
 		}
 
 		// передаём управление следующему хендлеру

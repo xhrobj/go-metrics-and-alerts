@@ -36,10 +36,14 @@ func (o *FileObserver) Notify(ctx context.Context, event Event) error {
 	if err != nil {
 		return fmt.Errorf("open audit file: %w", err)
 	}
-	defer file.Close()
 
 	if err := json.NewEncoder(file).Encode(event); err != nil {
+		_ = file.Close()
 		return fmt.Errorf("write audit event: %w", err)
+	}
+
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close audit file: %w", err)
 	}
 
 	return nil

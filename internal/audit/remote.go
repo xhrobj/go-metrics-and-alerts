@@ -57,7 +57,9 @@ func (o *RemoteObserver) Notify(ctx context.Context, event Event) error {
 	if err != nil {
 		return fmt.Errorf("send audit event: %w", err)
 	}
-	defer rs.Body.Close()
+	defer func() {
+		_ = rs.Body.Close()
+	}()
 
 	_, _ = io.Copy(io.Discard, rs.Body)
 

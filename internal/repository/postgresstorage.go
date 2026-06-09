@@ -199,7 +199,9 @@ func (p *PostgresStorage) Snapshot(ctx context.Context) (map[string]float64, map
 			return fmt.Errorf("query snapshot: %w", err)
 		}
 
-		defer rows.Close()
+		defer func() {
+			_ = rows.Close()
+		}()
 
 		localGauges := make(map[string]float64)
 		localCounters := make(map[string]int64)

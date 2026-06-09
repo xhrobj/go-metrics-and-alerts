@@ -244,7 +244,7 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	metricName := chi.URLParam(r, "name")
 
 	// invalid type or missing name -> 404
-	if !(metricType == model.Gauge || metricType == model.Counter) || metricName == "" {
+	if (metricType != model.Gauge && metricType != model.Counter) || metricName == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -270,7 +270,9 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	// success
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(out))
+	if _, err := w.Write([]byte(out)); err != nil {
+		return
+	}
 }
 
 // ValueJSON возвращает текущее значение метрики в формате JSON.
@@ -370,7 +372,9 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	// success
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(out.String()))
+	if _, err := w.Write([]byte(out.String())); err != nil {
+		return
+	}
 }
 
 // Ping проверяет соединение с базой данных.

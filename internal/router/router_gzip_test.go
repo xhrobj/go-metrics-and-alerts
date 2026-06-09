@@ -48,7 +48,9 @@ func TestGzipMiddleware(t *testing.T) {
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -66,14 +68,18 @@ func TestGzipMiddleware(t *testing.T) {
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 		zr, err := gzip.NewReader(resp.Body)
 		require.NoError(t, err)
-		defer zr.Close()
+		defer func() {
+			_ = zr.Close()
+		}()
 
 		body, err := io.ReadAll(zr)
 		require.NoError(t, err)
@@ -91,7 +97,9 @@ func TestGzipMiddleware(t *testing.T) {
 
 		updateResp, err := http.DefaultClient.Do(updateReq)
 		require.NoError(t, err)
-		defer updateResp.Body.Close()
+		defer func() {
+			_ = updateResp.Body.Close()
+		}()
 
 		require.Equal(t, http.StatusOK, updateResp.StatusCode)
 
@@ -106,7 +114,9 @@ func TestGzipMiddleware(t *testing.T) {
 
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 

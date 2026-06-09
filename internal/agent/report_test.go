@@ -110,7 +110,9 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create gzip reader: %v", err)
 		}
-		defer zr.Close()
+		defer func() {
+			_ = zr.Close()
+		}()
 
 		if err := json.NewDecoder(zr).Decode(&metrics); err != nil {
 			t.Fatalf("failed to decode request body: %v", err)

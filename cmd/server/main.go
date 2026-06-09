@@ -45,7 +45,9 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		defer db.Close()
+		defer func() {
+			_ = db.Close()
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 		defer cancel()
