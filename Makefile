@@ -2,6 +2,7 @@
 	build build-server build-agent \
 	clean \
 	test test-race \
+	vet lint ci \
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
 	run-server run-server-env \
 	run-agent run-agent-env
@@ -33,12 +34,21 @@ build-agent:
 
 clean:
 	rm -f $(SERVER) $(AGENT)
+	find . -name "*.test" -delete
 
 test:
 	go test ./...
 
 test-race:
 	go test -race ./...
+
+vet:
+	go vet ./...
+
+lint:
+	golangci-lint run ./...
+
+ci: lint build vet test-race
 
 postgres-up:
 	docker run --name metrics-postgres \
