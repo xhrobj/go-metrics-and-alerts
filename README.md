@@ -832,5 +832,3 @@ http://localhost:8080/github.com/xhrobj/go-metrics-and-alerts/internal/router#pk
 <a href="docs/images/sprint6-evo.png">
   <img src="docs/images/previews/sprint6-evo.png" alt="Спринт 6 - эволюция сервиса">
 </a>
-
----
