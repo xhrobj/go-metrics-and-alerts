@@ -1,38 +1,6 @@
-# go-musthave-metrics-tpl
+# Задания по треку 📈 «Сервис сбора метрик и алертинга»
 
-[![CI](https://github.com/xhrobj/go-metrics-and-alerts/actions/workflows/go.yml/badge.svg)](https://github.com/xhrobj/go-metrics-and-alerts/actions)
-
-Шаблон репозитория для трека «Сервер сбора метрик и алертинга».
-
-## Начало работы
-
-1. Склонируйте репозиторий в любую подходящую директорию на вашем компьютере.
-2. В корне репозитория выполните команду `go mod init <name>` (где `<name>` — адрес вашего репозитория на GitHub без префикса `https://`) для создания модуля.
-
-## Запуск автотестов
-
-Для успешного запуска автотестов называйте ветки `iter<number>`, где `<number>` — порядковый номер инкремента. Например, в ветке с названием `iter4` запустятся автотесты для инкрементов с первого по четвёртый.
-
-При мёрже ветки с инкрементом в основную ветку `main` будут запускаться все автотесты.
-
-Подробнее про локальный и автоматический запуск читайте в [README автотестов](https://github.com/Yandex-Practicum/go-autotests).
-
-## Структура проекта
-
-Приведённая в этом репозитории структура проекта является рекомендуемой, но не обязательной.
-
-Это лишь пример организации кода, который поможет вам в реализации сервиса.
-
-При необходимости можно вносить изменения в структуру проекта, использовать любые библиотеки и предпочитаемые структурные паттерны организации кода приложения, например:
-
-- **DDD** (Domain-Driven Design)
-- **Clean Architecture**
-- **Hexagonal Architecture**
-- **Layered Architecture**
-
----
-
-# Задания по треку «Сервис сбора метрик и алертинга»
+[![(-_-) Go CI](https://github.com/xhrobj/go-metrics-and-alerts/actions/workflows/go-ci.yml/badge.svg)](https://github.com/xhrobj/go-metrics-and-alerts/actions/workflows/go-ci.yml)
 
 ## Спринт 1
 
@@ -214,7 +182,7 @@ Content-Type: text/plain; charset=utf-8
 - Флаг `-r=<ЗНАЧЕНИЕ>` позволяет переопределять `reportInterval` — частоту отправки метрик на сервер (по умолчанию 10 секунд).
 - Флаг `-p=<ЗНАЧЕНИЕ>` позволяет переопределять `pollInterval` — частоту опроса метрик из пакета `runtime` (по умолчанию 2 секунды).
 
-При попытке передать приложению незвестные флаги оно должно завершаться с сообщением о соответствующей ошибке.
+При попытке передать приложению неизвестные флаги оно должно завершаться с сообщением о соответствующей ошибке.
 
 Значения интервалов времени должны задаваться в секундах.
 
@@ -224,6 +192,18 @@ Content-Type: text/plain; charset=utf-8
 
 - #11. Добавить флаг для Сервера
 - #12. Добавить флаги для Агента
+
+---
+
+### Итоги спринта 1
+
+<a href="docs/images/sprint1-path.png">
+  <img src="docs/images/previews/sprint1-path.png" alt="Спринт 1 - карта инкрементов">
+</a>
+
+<a href="docs/images/sprint1-evo.png">
+  <img src="docs/images/previews/sprint1-evo.png" alt="Спринт 1 - эволюция сервиса">
+</a>
 
 ---
 
@@ -410,6 +390,18 @@ Content-Type: application/json
 
 ---
 
+### Итоги спринта 2
+
+<a href="docs/images/sprint2-path.png">
+  <img src="docs/images/previews/sprint2-path.png" alt="Спринт 2 - карта инкрементов">
+</a>
+
+<a href="docs/images/sprint2-evo.png">
+  <img src="docs/images/previews/sprint2-evo.png" alt="Спринт 2 - эволюция сервиса">
+</a>
+
+---
+
 ## Спринт 3
 
 ### Инкремент 10
@@ -512,6 +504,18 @@ Content-Type: application/json
 
 ---
 
+### Итоги спринта 3
+
+<a href="docs/images/sprint3-path.png">
+  <img src="docs/images/previews/sprint3-path.png" alt="Спринт 3 - карта инкрементов">
+</a>
+
+<a href="docs/images/sprint3-evo.png">
+  <img src="docs/images/previews/sprint3-evo.png" alt="Спринт 3 - эволюция сервиса">
+</a>
+
+---
+
 ## Спринт 4
 
 ### Инкремент 14
@@ -601,9 +605,25 @@ Content-Type: application/json
 
 ---
 
+### Итоги спринта 4
+
+<a href="docs/images/sprint4-evo.png">
+  <img src="docs/images/previews/sprint4-evo.png" alt="Спринт 4 - эволюция сервиса">
+</a>
+
+---
+
 ## Спринт 5
 
 Спринт 5 был посвящён проекту [**(^.^)~ Gophermart**](https://github.com/xhrobj/gophermart).
+
+---
+
+### Итоги спринтов 1 - 5
+
+<a href="docs/images/sprint1-5-path.png">
+  <img src="docs/images/previews/sprint1-5-path.png" alt="Спринты 1-5 - карта инкрементов">
+</a>
 
 ---
 
@@ -791,12 +811,26 @@ go tool cover -func=coverage.out | tail -n 1
 "$(go env GOPATH)/bin/pkgsite"
 ```
 
-После запуска pkgsite примеры доступны в браузере:
+После запуска `pkgsite` примеры доступны в браузере:
 
 ```text
 http://localhost:8080/github.com/xhrobj/go-metrics-and-alerts/internal/router#pkg-examples
 ```
 
-<a href="docs/images/increment-19-pkgsite-examples.png"> <img src="docs/images/previews/increment-19-pkgsite-examples.png" alt="Examples в локальной документации pkgsite"> </a>
+<a href="docs/images/increment-19-pkgsite-examples.png">
+  <img src="docs/images/previews/increment-19-pkgsite-examples.png" alt="Examples в локальной документации pkgsite">
+</a>
+
+---
+
+### Итоги спринта 6
+
+<a href="docs/images/sprint6-path.png">
+  <img src="docs/images/previews/sprint6-path.png" alt="Спринт 6 - карта инкрементов">
+</a>
+
+<a href="docs/images/sprint6-evo.png">
+  <img src="docs/images/previews/sprint6-evo.png" alt="Спринт 6 - эволюция сервиса">
+</a>
 
 ---
