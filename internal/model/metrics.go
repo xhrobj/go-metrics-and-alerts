@@ -27,5 +27,6 @@ type Metrics struct {
 	// Value — значение метрики типа gauge
 	Value *float64 `json:"value,omitempty"`
 
+	// Hash содержит подпись метрики, рассчитанную по ключу.
 	Hash string `json:"hash,omitempty"`
 }

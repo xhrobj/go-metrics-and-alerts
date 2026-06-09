@@ -7,9 +7,12 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
+
+	// Подключает поддержку миграций из файловой системы.
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
+// RunMigrations применяет SQL-миграции к подключенной базе данных PostgreSQL.
 func RunMigrations(db *sql.DB) error {
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
