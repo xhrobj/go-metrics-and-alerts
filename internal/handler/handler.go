@@ -62,7 +62,7 @@ func (h *Handler) EnableAudit(auditor Auditor, log *zap.Logger) {
 // Update принимает метрику на хранение.
 // Данные метрики передаются через параметры URL.
 //
-// Deprecated: используйте UpdateJSON для передачи метрик в формате JSON.
+// Legacy endpoint: для новых интеграций используйте UpdateJSON.
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -240,7 +240,7 @@ func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 // Value возвращает текущее значение метрики в текстовом виде.
 // Тип и имя метрики передаются через параметры URL.
 //
-// Deprecated: используйте ValueJSON для получения метрик в формате JSON.
+// Legacy endpoint: для новых интеграций используйте ValueJSON.
 func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
