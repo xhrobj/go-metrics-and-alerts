@@ -775,7 +775,28 @@ go tool cover -func=coverage.out | tail -n 1
 
 **Задачи**
 
-- #59. Проверить и, при необходимости, добавить недостающие godoc-комменты к экспортируемым сущностям
+- #59. Проверить и, при необходимости, добавить недостающие godoc-комментарии к экспортируемым сущностям
 - #60. Добавить примеры работы с эндпоинтами
+
+**Результаты**
+
+Добавлены исполняемые examples для основных HTTP-эндпоинтов:
+- обновление и чтение метрики через legacy path endpoints
+- обновление и чтение метрики через JSON endpoints
+- пакетное обновление метрик через `/updates`
+
+Локальная документация запускается командой:
+
+```bash
+"$(go env GOPATH)/bin/pkgsite"
+```
+
+После запуска pkgsite примеры доступны в браузере:
+
+```text
+http://localhost:8080/github.com/xhrobj/go-metrics-and-alerts/internal/router#pkg-examples
+```
+
+<a href="docs/images/increment-19-pkgsite-examples.png"> <img src="docs/images/previews/increment-19-pkgsite-examples.png" alt="Examples в локальной документации pkgsite"> </a>
 
 ---
