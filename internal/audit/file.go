@@ -10,15 +10,22 @@ import (
 
 // FileObserver записывает события аудита в файл.
 type FileObserver struct {
-	path string
-	mu   sync.Mutex
+	file    *os.File
+	encoder *json.Encoder
+	mu      sync.Mutex
 }
 
 // NewFileObserver создаёт Observer для записи событий аудита в файл.
-func NewFileObserver(path string) *FileObserver {
-	return &FileObserver{
-		path: path,
+func NewFileObserver(path string) (*FileObserver, error) {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open audit file: %w", err)
 	}
+
+	return &FileObserver{
+		file:    file,
+		encoder: json.NewEncoder(file),
+	}, nil
 }
 
 // Notify записывает событие аудита отдельной JSON-строкой в конец файла.
@@ -32,19 +39,32 @@ func (o *FileObserver) Notify(ctx context.Context, event Event) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	file, err := os.OpenFile(o.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return fmt.Errorf("open audit file: %w", err)
+	if o.file == nil || o.encoder == nil {
+		return fmt.Errorf("audit file is closed")
 	}
 
-	if err := json.NewEncoder(file).Encode(event); err != nil {
-		_ = file.Close()
+	if err := o.encoder.Encode(event); err != nil {
 		return fmt.Errorf("write audit event: %w", err)
 	}
 
-	if err := file.Close(); err != nil {
+	return nil
+}
+
+// Close закрывает файл аудита.
+func (o *FileObserver) Close() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	if o.file == nil {
+		return nil
+	}
+
+	if err := o.file.Close(); err != nil {
 		return fmt.Errorf("close audit file: %w", err)
 	}
+
+	o.file = nil
+	o.encoder = nil
 
 	return nil
 }

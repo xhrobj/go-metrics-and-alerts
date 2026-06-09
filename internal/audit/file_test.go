@@ -34,13 +34,30 @@ func readAuditEvents(t *testing.T, path string) []Event {
 	return events
 }
 
+func newFileObserverForTest(t *testing.T, path string) *FileObserver {
+	t.Helper()
+
+	observer, err := NewFileObserver(path)
+	if err != nil {
+		t.Fatalf("create file observer failed: %v", err)
+	}
+
+	t.Cleanup(func() {
+		if err := observer.Close(); err != nil {
+			t.Fatalf("close file observer failed: %v", err)
+		}
+	})
+
+	return observer
+}
+
 // Notify создаёт файл аудита и записывает событие отдельной JSON-строкой.
 func TestFileObserver_Notify_CreatesFileAndWritesEvent_OK(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	observer := NewFileObserver(path)
+	observer := newFileObserverForTest(t, path)
 
 	event := Event{
-		TS:        123,
+		TS:        42,
 		Metrics:   []string{"Alloc", "Frees"},
 		IPAddress: "127.0.0.1",
 	}
@@ -49,8 +66,11 @@ func TestFileObserver_Notify_CreatesFileAndWritesEvent_OK(t *testing.T) {
 		t.Fatalf("got error %v, want nil", err)
 	}
 
-	events := readAuditEvents(t, path)
+	if err := observer.Close(); err != nil {
+		t.Fatalf("close file observer failed: %v", err)
+	}
 
+	events := readAuditEvents(t, path)
 	if len(events) != 1 {
 		t.Fatalf("got events len %d, want %d", len(events), 1)
 	}
@@ -58,18 +78,19 @@ func TestFileObserver_Notify_CreatesFileAndWritesEvent_OK(t *testing.T) {
 	assertAuditEvent(t, events[0], event)
 }
 
-// Notify добавляет новое событие в конец существующего файла аудита.
-func TestFileObserver_Notify_AppendsEvent_OK(t *testing.T) {
+// Notify записывает несколько событий через один открытый FileObserver.
+func TestFileObserver_Notify_WritesSeveralEvents_OK(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	observer := NewFileObserver(path)
+	observer := newFileObserverForTest(t, path)
 
 	firstEvent := Event{
-		TS:        123,
+		TS:        42,
 		Metrics:   []string{"Alloc"},
 		IPAddress: "127.0.0.1",
 	}
+
 	secondEvent := Event{
-		TS:        456,
+		TS:        43,
 		Metrics:   []string{"Frees"},
 		IPAddress: "127.0.0.2",
 	}
@@ -77,12 +98,16 @@ func TestFileObserver_Notify_AppendsEvent_OK(t *testing.T) {
 	if err := observer.Notify(context.Background(), firstEvent); err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
+
 	if err := observer.Notify(context.Background(), secondEvent); err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
 
-	events := readAuditEvents(t, path)
+	if err := observer.Close(); err != nil {
+		t.Fatalf("close file observer failed: %v", err)
+	}
 
+	events := readAuditEvents(t, path)
 	if len(events) != 2 {
 		t.Fatalf("got events len %d, want %d", len(events), 2)
 	}
@@ -94,25 +119,63 @@ func TestFileObserver_Notify_AppendsEvent_OK(t *testing.T) {
 // Notify возвращает ошибку, если контекст уже отменён.
 func TestFileObserver_Notify_CanceledContext_ReturnsError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	observer := NewFileObserver(path)
+	observer := newFileObserverForTest(t, path)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	err := observer.Notify(ctx, Event{})
-
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("got error %v, want %v", err, context.Canceled)
 	}
 }
 
-// Notify возвращает ошибку, если файл аудита невозможно открыть.
-func TestFileObserver_Notify_OpenFileError(t *testing.T) {
+// NewFileObserver возвращает ошибку, если файл аудита невозможно открыть.
+func TestNewFileObserver_OpenFileError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing", "audit.log")
-	observer := NewFileObserver(path)
 
-	err := observer.Notify(context.Background(), Event{})
+	observer, err := NewFileObserver(path)
+	if err == nil {
+		t.Fatal("got nil error, want error")
+	}
 
+	if observer != nil {
+		t.Fatal("got observer, want nil")
+	}
+}
+
+// Close можно вызвать повторно без ошибки.
+func TestFileObserver_Close_Idempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+
+	observer, err := NewFileObserver(path)
+	if err != nil {
+		t.Fatalf("create file observer failed: %v", err)
+	}
+
+	if err := observer.Close(); err != nil {
+		t.Fatalf("close file observer failed: %v", err)
+	}
+
+	if err := observer.Close(); err != nil {
+		t.Fatalf("second close file observer failed: %v", err)
+	}
+}
+
+// Notify возвращает ошибку после закрытия FileObserver.
+func TestFileObserver_Notify_AfterClose_ReturnsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+
+	observer, err := NewFileObserver(path)
+	if err != nil {
+		t.Fatalf("create file observer failed: %v", err)
+	}
+
+	if err := observer.Close(); err != nil {
+		t.Fatalf("close file observer failed: %v", err)
+	}
+
+	err = observer.Notify(context.Background(), Event{})
 	if err == nil {
 		t.Fatal("got nil error, want error")
 	}

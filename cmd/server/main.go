@@ -107,22 +107,33 @@ func run() error {
 		}
 	}
 
-	var auditDispatcher *audit.Auditor
+	h := handler.New(svc, db)
 
 	if cfg.AuditFile != "" || cfg.AuditURL != "" {
-		auditDispatcher = audit.NewAuditor()
+		auditDispatcher := audit.NewAuditor()
 
 		if cfg.AuditFile != "" {
-			auditDispatcher.Subscribe(audit.NewFileObserver(cfg.AuditFile))
+			fileObserver, err := audit.NewFileObserver(cfg.AuditFile)
+			if err != nil {
+				return err
+			}
+
+			defer func() {
+				if err := fileObserver.Close(); err != nil {
+					lg.Error("failed to close audit file", zap.Error(err))
+				}
+			}()
+
+			auditDispatcher.Subscribe(fileObserver)
 		}
 
 		if cfg.AuditURL != "" {
 			auditDispatcher.Subscribe(audit.NewRemoteObserver(cfg.AuditURL))
 		}
+
+		h.EnableAudit(auditDispatcher, lg)
 	}
 
-	h := handler.New(svc, db)
-	h.EnableAudit(auditDispatcher, lg)
 	r := router.New(h, lg, cfg.Key)
 
 	lg.Info("running server",
