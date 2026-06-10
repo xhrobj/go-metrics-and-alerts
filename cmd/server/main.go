@@ -9,6 +9,7 @@ import (
 
 	"database/sql"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
@@ -44,7 +45,9 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		defer db.Close()
+		defer func() {
+			_ = db.Close()
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 		defer cancel()
@@ -105,6 +108,32 @@ func run() error {
 	}
 
 	h := handler.New(svc, db)
+
+	if cfg.AuditFile != "" || cfg.AuditURL != "" {
+		auditDispatcher := audit.NewAuditor()
+
+		if cfg.AuditFile != "" {
+			fileObserver, err := audit.NewFileObserver(cfg.AuditFile)
+			if err != nil {
+				return err
+			}
+
+			defer func() {
+				if err := fileObserver.Close(); err != nil {
+					lg.Error("failed to close audit file", zap.Error(err))
+				}
+			}()
+
+			auditDispatcher.Subscribe(fileObserver)
+		}
+
+		if cfg.AuditURL != "" {
+			auditDispatcher.Subscribe(audit.NewRemoteObserver(cfg.AuditURL))
+		}
+
+		h.EnableAudit(auditDispatcher, lg)
+	}
+
 	r := router.New(h, lg, cfg.Key)
 
 	lg.Info("running server",

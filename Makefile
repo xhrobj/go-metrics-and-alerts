@@ -2,6 +2,7 @@
 	build build-server build-agent \
 	clean \
 	test test-race \
+	vet lint ci \
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
 	run-server run-server-env \
 	run-agent run-agent-env
@@ -18,6 +19,7 @@ SERVER_ADDRESS_ENV=localhost:8088
 
 RATE_LIMIT=3
 SECRET_KEY=god
+AUDIT_FILE=audit.log
 
 SERVER=cmd/server/server
 AGENT=cmd/agent/agent
@@ -32,12 +34,21 @@ build-agent:
 
 clean:
 	rm -f $(SERVER) $(AGENT)
+	find . -name "*.test" -delete
 
 test:
 	go test ./...
 
 test-race:
 	go test -race ./...
+
+vet:
+	go vet ./...
+
+lint:
+	golangci-lint run ./...
+
+ci: lint build vet test-race
 
 postgres-up:
 	docker run --name metrics-postgres \
@@ -60,10 +71,10 @@ postgres-connect:
 	docker exec -it metrics-postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 
 run-server: build-server
-	./$(SERVER) -a=$(SERVER_ADDRESS_DEFAULT) -d=$(POSTGRES_DSN) -k=$(SECRET_KEY)
+	./$(SERVER) -a=$(SERVER_ADDRESS_DEFAULT) -d=$(POSTGRES_DSN) -k=$(SECRET_KEY) --audit-file=$(AUDIT_FILE)
 
 run-server-env: build-server
-	ADDRESS=$(SERVER_ADDRESS_ENV) DATABASE_DSN=$(POSTGRES_DSN) KEY=$(SECRET_KEY) ./$(SERVER)
+	ADDRESS=$(SERVER_ADDRESS_ENV) DATABASE_DSN=$(POSTGRES_DSN) KEY=$(SECRET_KEY) AUDIT_FILE=$(AUDIT_FILE) ./$(SERVER)
 
 run-agent: build-agent
 	./$(AGENT) -a=$(SERVER_ADDRESS_DEFAULT) -p=2 -r=10 -l=$(RATE_LIMIT) -k=$(SECRET_KEY)
