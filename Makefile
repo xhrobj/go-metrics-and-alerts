@@ -1,7 +1,7 @@
 .PHONY: \
 	build build-server build-agent \
 	clean \
-	test test-race \
+	test test-race test-coverage \
 	vet lint ci \
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
 	run-server run-server-env \
@@ -41,6 +41,9 @@ test:
 
 test-race:
 	go test -race ./...
+
+test-coverage:
+	go test -coverprofile=coverage.out ./...
 
 vet:
 	go vet ./...
