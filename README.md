@@ -859,4 +859,6 @@ http://localhost:8080/github.com/xhrobj/go-metrics-and-alerts/internal/router#pk
 
 - #61. Подготовить фикстуры для собственного анализатора запрета os.Exit main
 - #62. Реализовать собственный анализатор запрета os.Exit в main
-- #63. Собрать multichecker, включающий собственный анализатор запрета os.Exit в main
+- #63. Собрать multichecker, включающий анализатор запрета os.Exit в main
+
+---

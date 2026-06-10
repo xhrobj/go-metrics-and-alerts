@@ -1,4 +1,5 @@
-// Package noosexit содержит анализатор, запрещающий прямой вызов os.Exit внутри функции main пакета main.
+// Package noosexit содержит анализатор, запрещающий прямой вызов os.Exit
+// внутри функции main пакета main.
 package noosexit
 
 import (
@@ -19,7 +20,7 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	if pass.Pkg.Name() != "main" || strings.HasSuffix(pass.Pkg.Path(), ".test") {
+	if !isUserMainPackage(pass.Pkg) {
 		return nil, nil
 	}
 
@@ -46,6 +47,12 @@ func run(pass *analysis.Pass) (any, error) {
 	}
 
 	return nil, nil
+}
+
+func isUserMainPackage(pkg *types.Package) bool {
+	// Go tooling генерирует test main-пакеты с import path, оканчивающимся на .test.
+	// В них есть служебный os.Exit для запуска тестов, это не пользовательский код.
+	return pkg.Name() == "main" && !strings.HasSuffix(pkg.Path(), ".test")
 }
 
 func isOSExitCall(info *types.Info, call *ast.CallExpr) bool {

@@ -48,11 +48,9 @@ func main() {
 
 func analyzers() []*analysis.Analyzer {
 
-	// Создайте свой `multichecker`, состоящий из:
-
 	checks := []*analysis.Analyzer{
 
-		// - стандартных статических анализаторов пакета golang.org/x/tools/go/analysis/passes
+		// Стандартные анализаторы Go:
 
 		asmdecl.Analyzer,
 		assign.Analyzer,
@@ -87,23 +85,23 @@ func analyzers() []*analysis.Analyzer {
 		unusedresult.Analyzer,
 		waitgroup.Analyzer,
 
-		// - двух или более любых публичных анализаторов на ваш выбор
+		// Публичные сторонние анализаторы:
 
 		bodyclose.Analyzer,
 		nilerr.Analyzer,
 
-		// добавьте в `multichecker` собственный анализатор, запрещающий использовать прямой вызов `os.Exit` в функции `main` пакета `main`
+		// Собственный анализатор проекта:
 
 		noosexit.Analyzer,
 	}
 
-	// - всех анализаторов класса `SA` пакета `staticcheck.io`
+	// Все анализаторы класса SA из Staticcheck:
 
 	for _, analyzer := range staticcheck.Analyzers {
 		checks = append(checks, analyzer.Analyzer)
 	}
 
-	// - не менее одного анализатора остальных классов пакета `staticcheck.io`
+	// Дополнительный класс S из Staticcheck:
 
 	for _, analyzer := range simple.Analyzers {
 		checks = append(checks, analyzer.Analyzer)

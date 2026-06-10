@@ -9,10 +9,11 @@ import (
 
 func TestAnalyzer(t *testing.T) {
 	testdata := analysistest.TestData()
-
-	analysistest.Run(t, testdata, noosexit.Analyzer,
+	fixtures := []string{
 		"badmain",
 		"helperexit",
 		"notmainpkg",
-	)
+	}
+
+	analysistest.Run(t, testdata, noosexit.Analyzer, fixtures...)
 }
