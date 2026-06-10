@@ -1,8 +1,8 @@
 .PHONY: \
 	build build-server build-agent \
 	clean \
-	test test-race test-coverage \
-	vet lint ci \
+	test test-race test-coverage show-coverage \
+	vet lint staticlint ci \
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
 	run-server run-server-env \
 	run-agent run-agent-env
@@ -33,7 +33,7 @@ build-agent:
 	go build -o $(AGENT) ./cmd/agent
 
 clean:
-	rm -f $(SERVER) $(AGENT)
+	rm -f $(SERVER) $(AGENT) coverage.out
 	find . -name "*.test" -delete
 
 test:
@@ -45,13 +45,19 @@ test-race:
 test-coverage:
 	go test -covermode=atomic -coverprofile=coverage.out ./...
 
+show-coverage: test-coverage
+	go tool cover -func=coverage.out | tail -n 1
+
 vet:
 	go vet ./...
 
 lint:
 	golangci-lint run ./...
 
-ci: lint build vet test-race
+staticlint:
+	go run ./cmd/staticlint ./...
+
+ci: build  test-race vet lint staticlint
 
 postgres-up:
 	docker run --name metrics-postgres \

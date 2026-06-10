@@ -1,14 +1,17 @@
+// Package noosexit содержит анализатор, запрещающий прямой вызов os.Exit внутри функции main пакета main.
 package noosexit
 
 import (
 	"go/ast"
 	"go/types"
+	"strings"
 
 	"golang.org/x/tools/go/analysis"
 )
 
 const diagnostic = "os.Exit call in main function is prohibited"
 
+// Analyzer проверяет прямые вызовы os.Exit внутри функции main пакета main.
 var Analyzer = &analysis.Analyzer{
 	Name: "noosexit",
 	Doc:  "prohibits direct os.Exit calls in main function of main package",
@@ -16,7 +19,7 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	if pass.Pkg.Name() != "main" {
+	if pass.Pkg.Name() != "main" || strings.HasSuffix(pass.Pkg.Path(), ".test") {
 		return nil, nil
 	}
 
