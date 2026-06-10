@@ -25,25 +25,7 @@ func run(pass *analysis.Pass) (any, error) {
 	}
 
 	for _, file := range pass.Files {
-		for _, decl := range file.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Name.Name != "main" || fn.Body == nil {
-				continue
-			}
-
-			ast.Inspect(fn.Body, func(node ast.Node) bool {
-				call, ok := node.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-
-				if isOSExitCall(pass.TypesInfo, call) {
-					pass.Reportf(call.Pos(), diagnostic)
-				}
-
-				return true
-			})
-		}
+		inspectFile(pass, file)
 	}
 
 	return nil, nil
@@ -53,6 +35,41 @@ func isUserMainPackage(pkg *types.Package) bool {
 	// Go tooling генерирует test main-пакеты с import path, оканчивающимся на .test.
 	// В них есть служебный os.Exit для запуска тестов, это не пользовательский код.
 	return pkg.Name() == "main" && !strings.HasSuffix(pkg.Path(), ".test")
+}
+
+func inspectFile(pass *analysis.Pass, file *ast.File) {
+	for _, decl := range file.Decls {
+		fn, ok := mainFuncDecl(decl)
+		if !ok {
+			continue
+		}
+
+		reportOSExitCalls(pass, fn)
+	}
+}
+
+func mainFuncDecl(decl ast.Decl) (*ast.FuncDecl, bool) {
+	fn, ok := decl.(*ast.FuncDecl)
+	if !ok || fn.Name.Name != "main" || fn.Body == nil {
+		return nil, false
+	}
+
+	return fn, true
+}
+
+func reportOSExitCalls(pass *analysis.Pass, fn *ast.FuncDecl) {
+	ast.Inspect(fn.Body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		if isOSExitCall(pass.TypesInfo, call) {
+			pass.Reportf(call.Pos(), diagnostic)
+		}
+
+		return true
+	})
 }
 
 func isOSExitCall(info *types.Info, call *ast.CallExpr) bool {
