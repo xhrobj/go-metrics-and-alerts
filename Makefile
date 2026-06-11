@@ -1,8 +1,9 @@
 .PHONY: \
+	show-coverage \
 	generate-reset \
 	build build-server build-agent \
 	clean-generated clean \
-	test test-race test-coverage show-coverage \
+	test test-race test-coverage \
 	vet lint staticlint ci \
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
 	run-server run-server-env \
@@ -29,6 +30,18 @@ AUDIT_FILE=audit.log
 SERVER=cmd/server/server
 AGENT=cmd/agent/agent
 
+# номер текуего спринта
+SPRINT_NUMBER = 7
+
+BUILD_VERSION = v0.$(SPRINT_NUMBER).0
+BUILD_DATE = $(shell date +%Y-%m-%d)
+BUILD_COMMIT = $(shell git rev-parse --short HEAD)
+
+LDFLAGS = -X main.buildVersion=$(BUILD_VERSION) -X main.buildDate=$(BUILD_DATE) -X main.buildCommit=$(BUILD_COMMIT)
+
+show-coverage: test-coverage
+	go tool cover -func=coverage.out | tail -n 1
+
 # запустить генератор reset.gen.go (см. С7И21)
 generate-reset:
 	go run ./cmd/reset
@@ -36,10 +49,16 @@ generate-reset:
 build: build-server build-agent
 
 build-server:
-	go build -o $(SERVER) ./cmd/server
+	go build \
+		-ldflags "$(LDFLAGS)" \
+		-o $(SERVER) \
+		./cmd/server
 
 build-agent:
-	go build -o $(AGENT) ./cmd/agent
+	go build \
+		-ldflags "$(LDFLAGS)" \
+		-o $(AGENT) \
+		./cmd/agent
 
 # удалить сгенерированные reset.gen.go, кроме фикстур
 clean-generated:
@@ -58,9 +77,6 @@ test-race:
 
 test-coverage:
 	go test -covermode=atomic -coverprofile=coverage.out ./...
-
-show-coverage: test-coverage
-	go tool cover -func=coverage.out | tail -n 1
 
 vet:
 	go vet ./...

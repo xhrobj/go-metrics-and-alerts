@@ -8,12 +8,23 @@ import (
 	"syscall"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/agent"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/buildinfo"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	if err := buildinfo.Print(os.Stdout, buildVersion, buildDate, buildCommit); err != nil {
+		log.Fatal(err)
+	}
+
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}

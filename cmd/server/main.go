@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"database/sql"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/buildinfo"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
@@ -22,7 +24,17 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	if err := buildinfo.Print(os.Stdout, buildVersion, buildDate, buildCommit); err != nil {
+		log.Fatal(err)
+	}
+
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
