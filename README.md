@@ -863,9 +863,9 @@ http://localhost:8080/github.com/xhrobj/go-metrics-and-alerts/internal/router#pk
 
 **Результаты**
 
-Добавлена утилита cmd/staticlint, которая запускает собственный multichecker проекта. Аанализатор noosexit запрещает прямой вызов os.Exit внутри функции main пакета main.
+Добавлена утилита `cmd/staticlint`, которая запускает собственный `multichecker` проекта. Аанализатор `noosexit` запрещает прямой вызов `os.Exit` внутри функции `main` пакета `main`.
 
-Для запуска staticlint добавлена команда:
+Для запуска `staticlint` добавлена команда:
 
 ```bash
 make staticlint
