@@ -997,3 +997,15 @@ Build commit: <buildCommit> (или "N/A" при отсутствии значе
 - #68. Добавить информацию о сборке и ее вывод при старте Агента и Сервера
 
 ---
+
+### Итоги спринта 7
+
+<a href="docs/images/sprint7-path.png">
+  <img src="docs/images/previews/sprint7-path.png" alt="Спринт 7 - карта инкрементов">
+</a>
+
+<a href="docs/images/sprint7-evo.png">
+  <img src="docs/images/previews/sprint7-evo.png" alt="Спринт 7 - эволюция сервиса">
+</a>
+
+---

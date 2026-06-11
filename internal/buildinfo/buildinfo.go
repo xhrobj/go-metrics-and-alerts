@@ -7,6 +7,8 @@ import (
 
 const notAvailable = "N/A"
 
+// Print выводит информацию о сборке в writer.
+// Пустые значения заменяются на N/A.
 func Print(w io.Writer, version, date, commit string) error {
 	if _, err := fmt.Fprintf(w, "Build version: %s\n", value(version)); err != nil {
 		return err
