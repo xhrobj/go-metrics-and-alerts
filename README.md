@@ -861,6 +861,16 @@ http://localhost:8080/github.com/xhrobj/go-metrics-and-alerts/internal/router#pk
 - #62. Реализовать собственный анализатор запрета os.Exit в main
 - #63. Собрать multichecker, включающий анализатор запрета os.Exit в main
 
+**Результаты**
+
+Добавлена утилита cmd/staticlint, которая запускает собственный multichecker проекта. Аанализатор noosexit запрещает прямой вызов os.Exit внутри функции main пакета main.
+
+Для запуска staticlint добавлена команда:
+
+```bash
+make staticlint
+```
+
 ---
 
 ### Инкремент 21
@@ -922,5 +932,21 @@ func (rs *ResetableStruct) Reset() {
 - #64. Подготовить фикстуры для генератора Reset-методов
 - #65. Реализовать генерацию reset.gen.go для структур с "аннотацией" generate:reset
 - #66. Добавить утилиту cmd/reset и Makefile-команды
+
+**Результаты**
+
+Добавлена утилита `cmd/reset`, которая сканирует Go-пакеты проекта, находит структуры с комментарием `// generate:reset` и генерирует для них методы `Reset()` в файлах `reset.gen.go`.
+
+Для запуска генератора добавлена команда:
+
+```bash
+make generate-reset
+```
+
+Для удаления сгенерированных reset.gen.go, команда:
+
+```bash
+make clean-generated
+```
 
 ---
