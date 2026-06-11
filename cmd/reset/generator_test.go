@@ -11,12 +11,25 @@ func TestGenerateBasicResetMethod(t *testing.T) {
 
 	copyDir(t, filepath.Join("testdata", "basic", "input"), tempDir)
 
-	if err := Generate(tempDir); err != nil {
+	generatedFiles, err := Generate(tempDir)
+	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
-	gotPath := filepath.Join(tempDir, "sample", "reset.gen.go")
-	wantPath := filepath.Join("testdata", "basic", "want", "sample", "reset.gen.go")
+	gotGeneratedCount := len(generatedFiles)
+	wantGeneratedCount := 1
+	if gotGeneratedCount != wantGeneratedCount {
+		t.Fatalf("len(generatedFiles) = %d, want %d", gotGeneratedCount, wantGeneratedCount)
+	}
+
+	gotGeneratedPath := filepath.Clean(generatedFiles[0])
+	wantGeneratedPath := filepath.Clean(filepath.Join(tempDir, "sample", generatedFile))
+	if gotGeneratedPath != wantGeneratedPath {
+		t.Fatalf("generated file path = %q, want %q", gotGeneratedPath, wantGeneratedPath)
+	}
+
+	gotPath := filepath.Join(tempDir, "sample", generatedFile)
+	wantPath := filepath.Join("testdata", "basic", "want", "sample", generatedFile)
 
 	got, err := os.ReadFile(gotPath)
 	if err != nil {

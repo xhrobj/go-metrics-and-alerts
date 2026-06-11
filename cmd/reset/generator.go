@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -35,38 +36,39 @@ type resetField struct {
 	Type ast.Expr
 }
 
-func Generate(root string) error {
+func Generate(root string) ([]string, error) {
 
 	// 1. найти пакеты со структурами с "аннотацией" // generate:reset
-
 	packages, err := collectPackages(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	dirs := make([]string, 0, len(packages))
 	for dir := range packages {
 		dirs = append(dirs, dir)
 	}
+	sort.Strings(dirs)
+
+	generatedFiles := make([]string, 0, len(dirs))
 
 	for _, dir := range dirs {
-
 		// 2. построить для найденных структур текст Go-кода с методами Reset()
-
 		src, err := buildGeneratedFile(packages[dir])
 		if err != nil {
-			return fmt.Errorf("build %s: %w", dir, err)
+			return nil, fmt.Errorf("build %s: %w", dir, err)
 		}
 
 		// 3. отформатировать и записать reset.gen.go в нужные пакеты
-
 		path := filepath.Join(dir, generatedFile)
 		if err := os.WriteFile(path, src, 0644); err != nil {
-			return fmt.Errorf("write %s: %w", path, err)
+			return nil, fmt.Errorf("write %s: %w", path, err)
 		}
+
+		generatedFiles = append(generatedFiles, path)
 	}
 
-	return nil
+	return generatedFiles, nil
 }
 
 func collectPackages(root string) (map[string]*packageInfo, error) {
@@ -107,6 +109,10 @@ func collectPackages(root string) (map[string]*packageInfo, error) {
 			packages[dir] = info
 		}
 
+		if info.Name != file.Name.Name {
+			return fmt.Errorf("package mismatch in %s: got %s, want %s", path, file.Name.Name, info.Name)
+		}
+
 		info.Structs = append(info.Structs, structs...)
 
 		return nil
@@ -121,7 +127,7 @@ func collectPackages(root string) (map[string]*packageInfo, error) {
 
 func shouldSkipDir(name string) bool {
 	switch name {
-	case ".git", "testdata":
+	case ".git", ".github", "vendor", "testdata", "migrations":
 		return true
 	default:
 		return false
