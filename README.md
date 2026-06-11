@@ -921,6 +921,6 @@ func (rs *ResetableStruct) Reset() {
 
 - #64. Подготовить фикстуры для генератора Reset-методов
 - #65. Реализовать генерацию reset.gen.go для структур с "аннотацией" generate:reset
-- #66. Добавить утилиту cmd/reset
+- #66. Добавить утилиту cmd/reset и Makefile-команды
 
 ---

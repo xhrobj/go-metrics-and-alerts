@@ -1,6 +1,7 @@
 .PHONY: \
+	generate-reset \
 	build build-server build-agent \
-	clean \
+	clean-generated clean \
 	test test-race test-coverage show-coverage \
 	vet lint staticlint ci \
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
@@ -24,6 +25,10 @@ AUDIT_FILE=audit.log
 SERVER=cmd/server/server
 AGENT=cmd/agent/agent
 
+# сгенерировать reset.gen.go
+generate-reset:
+	go run ./cmd/reset
+
 build: build-server build-agent
 
 build-server:
@@ -32,7 +37,11 @@ build-server:
 build-agent:
 	go build -o $(AGENT) ./cmd/agent
 
-clean:
+# удалить сгенерированные reset.gen.go, кроме фикстур
+clean-generated:
+	find . -name 'reset.gen.go' ! -path './cmd/reset/testdata/*' -exec rm -f {} +
+
+clean: clean-generated
 	rm -f $(SERVER) $(AGENT) coverage.out
 	find . -name "*.test" -delete
 
