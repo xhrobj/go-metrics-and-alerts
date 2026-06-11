@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -31,6 +32,8 @@ func main() {
 }
 
 func run() error {
+	echoBanner()
+
 	cfg, err := config.GetAgentConfig()
 	if err != nil {
 		return err
@@ -54,4 +57,16 @@ func run() error {
 	a.Run(ctx)
 
 	return nil
+}
+
+func echoBanner() {
+	const banner = `
+   _____          __         .__                 _____                         __   
+  /     \   _____/  |________|__| ____   ______ /  _  \    ____   ____   _____/  |_ 
+ /  \ /  \_/ __ \   __\_  __ \  |/ ___\ /  ___//  /_\  \  / ___\_/ __ \ /    \   __\
+/    Y    \  ___/|  |  |  | \/  \  \___ \___ \/    |    \/ /_/  >  ___/|   |  \  |  
+\____|__  /\___  >__|  |__|  |__|\___  >____  >____|__  /\___  / \___  >___|  /__|  
+        \/     \/                    \/     \/        \//_____/      \/     \/
+	`
+	fmt.Println(banner)
 }

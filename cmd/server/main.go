@@ -41,6 +41,8 @@ func main() {
 }
 
 func run() error {
+	echoBanner()
+
 	cfg, err := config.GetServerConfig()
 	if err != nil {
 		return err
@@ -156,4 +158,16 @@ func run() error {
 	)
 
 	return http.ListenAndServe(cfg.ServerAddr, r)
+}
+
+func echoBanner() {
+	const banner = `
+   _____          __         .__                _________                                
+  /     \   _____/  |________|__| ____   ______/   _____/ ______________  __ ___________ 
+ /  \ /  \_/ __ \   __\_  __ \  |/ ___\ /  ___/\_____  \_/ __ \_  __ \  \/ // __ \_  __ \
+/    Y    \  ___/|  |  |  | \/  \  \___ \___ \ /        \  ___/|  | \/\   /\  ___/|  | \/
+\____|__  /\___  >__|  |__|  |__|\___  >____  >_______  /\___  >__|    \_/  \___  >__|   
+        \/     \/                    \/     \/        \/     \/                 \/
+	`
+	fmt.Println(banner)
 }
