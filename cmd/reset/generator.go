@@ -36,6 +36,8 @@ type resetField struct {
 	Type ast.Expr
 }
 
+// Generate находит структуры с директивой generate:reset в root,
+// генерирует для них методы Reset и возвращает пути созданных файлов.
 func Generate(root string) ([]string, error) {
 
 	// 1. найти пакеты со структурами с "аннотацией" // generate:reset
@@ -80,49 +82,64 @@ func collectPackages(root string) (map[string]*packageInfo, error) {
 			return walkErr
 		}
 
-		if entry.IsDir() {
-			if path != root && shouldSkipDir(entry.Name()) {
-				return filepath.SkipDir
-			}
+		if shouldSkipPath(root, path, entry) {
+			return filepath.SkipDir
+		}
 
+		if entry.IsDir() || !isGoSource(path) {
 			return nil
 		}
 
-		if !isGoSource(path) {
-			return nil
-		}
-
-		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
-		if err != nil {
-			return fmt.Errorf("parse %s: %w", path, err)
-		}
-
-		structs := findResetStructs(file)
-		if len(structs) == 0 {
-			return nil
-		}
-
-		dir := filepath.Dir(path)
-		info := packages[dir]
-		if info == nil {
-			info = &packageInfo{Name: file.Name.Name}
-			packages[dir] = info
-		}
-
-		if info.Name != file.Name.Name {
-			return fmt.Errorf("package mismatch in %s: got %s, want %s", path, file.Name.Name, info.Name)
-		}
-
-		info.Structs = append(info.Structs, structs...)
-
-		return nil
+		return collectPackageFile(packages, fset, path)
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
 	return packages, nil
+}
+
+func shouldSkipPath(root string, path string, entry fs.DirEntry) bool {
+	return entry.IsDir() && path != root && shouldSkipDir(entry.Name())
+}
+
+func collectPackageFile(packages map[string]*packageInfo, fset *token.FileSet, path string) error {
+	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	structs := findResetStructs(file)
+	if len(structs) == 0 {
+		return nil
+	}
+
+	dir := filepath.Dir(path)
+
+	info, err := packageInfoForFile(packages, dir, file, path)
+	if err != nil {
+		return err
+	}
+
+	info.Structs = append(info.Structs, structs...)
+
+	return nil
+}
+
+func packageInfoForFile(packages map[string]*packageInfo, dir string, file *ast.File, path string) (*packageInfo, error) {
+	info := packages[dir]
+	if info == nil {
+		info = &packageInfo{Name: file.Name.Name}
+		packages[dir] = info
+
+		return info, nil
+	}
+
+	if info.Name != file.Name.Name {
+		return nil, fmt.Errorf("package mismatch in %s: got %s, want %s", path, file.Name.Name, info.Name)
+	}
+
+	return info, nil
 }
 
 func shouldSkipDir(name string) bool {
@@ -146,36 +163,62 @@ func findResetStructs(file *ast.File) []resetStruct {
 	var structs []resetStruct
 
 	for _, decl := range file.Decls {
-		genDecl, ok := decl.(*ast.GenDecl)
-		if !ok || genDecl.Tok != token.TYPE {
+		genDecl, ok := resetTypeDecl(decl)
+		if !ok {
 			continue
 		}
 
-		declMarked := hasResetDirective(genDecl.Doc)
-
-		for _, spec := range genDecl.Specs {
-			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok {
-				continue
-			}
-
-			structType, ok := typeSpec.Type.(*ast.StructType)
-			if !ok {
-				continue
-			}
-
-			if !declMarked && !hasResetDirective(typeSpec.Doc) {
-				continue
-			}
-
-			structs = append(structs, resetStruct{
-				Name:   typeSpec.Name.Name,
-				Fields: collectFields(structType),
-			})
-		}
+		structs = append(structs, collectResetStructs(genDecl)...)
 	}
 
 	return structs
+}
+
+func resetTypeDecl(decl ast.Decl) (*ast.GenDecl, bool) {
+	genDecl, ok := decl.(*ast.GenDecl)
+	if !ok || genDecl.Tok != token.TYPE {
+		return nil, false
+	}
+
+	return genDecl, true
+}
+
+func collectResetStructs(genDecl *ast.GenDecl) []resetStruct {
+	var structs []resetStruct
+
+	declMarked := hasResetDirective(genDecl.Doc)
+
+	for _, spec := range genDecl.Specs {
+		item, ok := resetStructFromSpec(spec, declMarked)
+		if !ok {
+			continue
+		}
+
+		structs = append(structs, item)
+	}
+
+	return structs
+}
+
+func resetStructFromSpec(spec ast.Spec, declMarked bool) (resetStruct, bool) {
+	typeSpec, ok := spec.(*ast.TypeSpec)
+	if !ok {
+		return resetStruct{}, false
+	}
+
+	structType, ok := typeSpec.Type.(*ast.StructType)
+	if !ok {
+		return resetStruct{}, false
+	}
+
+	if !declMarked && !hasResetDirective(typeSpec.Doc) {
+		return resetStruct{}, false
+	}
+
+	return resetStruct{
+		Name:   typeSpec.Name.Name,
+		Fields: collectFields(structType),
+	}, true
 }
 
 func hasResetDirective(group *ast.CommentGroup) bool {
@@ -301,7 +344,9 @@ func writePointerReset(builder *strings.Builder, fieldName string, fieldType *as
 	if ok {
 		fmt.Fprintf(builder, "\tif s.%s != nil {\n", fieldName)
 		fmt.Fprintf(builder, "\t\t*s.%s = %s\n", fieldName, zeroValue)
+
 		builder.WriteString("\t}\n")
+
 		return nil
 	}
 
@@ -353,7 +398,9 @@ func primitiveZeroValue(typeName string) (string, bool) {
 		return "false", true
 	case "int", "int8", "int16", "int32", "int64",
 		"uint", "uint8", "uint16", "uint32", "uint64", "uintptr",
-		"byte", "rune", "float32", "float64", "complex64", "complex128":
+		"byte", "rune",
+		"float32", "float64",
+		"complex64", "complex128":
 		return "0", true
 	default:
 		return "", false
