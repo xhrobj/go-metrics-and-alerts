@@ -12,8 +12,8 @@ import (
 // GetAgentConfig возвращает конфигурацию агента.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -p -r -l -k
-//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL, RATE_LIMIT, KEY
+//   - флаги: -a -p -r -l -k --crypto-key
+//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL, RATE_LIMIT, KEY, CRYPTO_KEY
 //
 // Приоритет источников: env > flag > default.
 func GetAgentConfig() (agentConfig.Config, error) {
@@ -24,6 +24,7 @@ func GetAgentConfig() (agentConfig.Config, error) {
 	flag.IntVar(&cfg.ReportIntervalInSec, "r", 10, "metrics reporting interval in seconds")
 	flag.IntVar(&cfg.RateLimit, "l", 5, "limit of simultaneous outgoing requests")
 	flag.StringVar(&cfg.Key, "k", "", "hash key for request signing")
+	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to public crypto key")
 
 	flag.Parse()
 
@@ -53,14 +54,18 @@ func GetAgentConfig() (agentConfig.Config, error) {
 		cfg.Key = key
 	}
 
+	if cryptoKey, ok := os.LookupEnv("CRYPTO_KEY"); ok {
+		cfg.CryptoKey = cryptoKey
+	}
+
 	return cfg, nil
 }
 
 // GetServerConfig возвращает конфигурацию HTTP-сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -i -f -r -d -k --audit-file --audit-url
-//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY, AUDIT_FILE, AUDIT_URL
+//   - флаги: -a -i -f -r -d -k --crypto-key --audit-file --audit-url
+//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY, CRYPTO_KEY, AUDIT_FILE, AUDIT_URL
 //
 // Приоритет источников: env > flag > default.
 func GetServerConfig() (serverConfig.Config, error) {
@@ -72,6 +77,7 @@ func GetServerConfig() (serverConfig.Config, error) {
 	flag.BoolVar(&cfg.Restore, "r", false, "restore metrics from file on startup")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database connection string")
 	flag.StringVar(&cfg.Key, "k", "", "hash key for request signing")
+	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to private crypto key")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "path to audit log file")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "audit receiver URL")
 
@@ -103,6 +109,10 @@ func GetServerConfig() (serverConfig.Config, error) {
 
 	if key, ok := os.LookupEnv("KEY"); ok {
 		cfg.Key = key
+	}
+
+	if cryptoKey, ok := os.LookupEnv("CRYPTO_KEY"); ok {
+		cfg.CryptoKey = cryptoKey
 	}
 
 	if auditFile, ok := os.LookupEnv("AUDIT_FILE"); ok {
