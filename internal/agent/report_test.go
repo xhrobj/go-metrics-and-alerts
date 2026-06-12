@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"go.uber.org/zap"
@@ -47,7 +47,7 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 	defer server.Close()
 
 	lg := zap.NewNop()
-	cfg := config.Config{
+	cfg := config.AgentConfig{
 		ServerAddr:          server.URL,
 		PollIntervalInSec:   2,
 		ReportIntervalInSec: 10,
@@ -123,7 +123,7 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 	defer server.Close()
 
 	lg := zap.NewNop()
-	cfg := config.Config{
+	cfg := config.AgentConfig{
 		ServerAddr:          server.URL,
 		PollIntervalInSec:   2,
 		ReportIntervalInSec: 10,

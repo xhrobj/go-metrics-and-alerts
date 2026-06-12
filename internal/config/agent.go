@@ -1,0 +1,81 @@
+package config
+
+import (
+	"flag"
+	"os"
+)
+
+// AgentConfig содержит параметры конфигурации Агента.
+type AgentConfig struct {
+	// ServerAddr - адрес и порт HTTP-сервера сбора метрик.
+	ServerAddr string
+
+	// PollIntervalInSec - интервал опроса runtime-метрик в секундах.
+	PollIntervalInSec int
+
+	// ReportIntervalInSec - интервал отправки метрик на сервер в секундах.
+	ReportIntervalInSec int
+
+	// RateLimit - максимальное количество одновременно исходящих запросов от Агента к Серверу.
+	RateLimit int
+
+	// Key - "секретный" ключ для вычисления и проверки подписи HTTP-запросов/ответов.
+	// Если не задан, подпись не используется.
+	Key string
+
+	// CryptoKey - путь к файлу публичного ключа для шифрования запросов.
+	// Если не задан, шифрование не используется.
+	CryptoKey string
+}
+
+// GetAgentConfig возвращает конфигурацию агента.
+//
+// Значения параметров могут быть заданы через:
+//   - флаги: -a -p -r -l -k --crypto-key
+//   - переменные окружения: ADDRESS, POLL_INTERVAL и REPORT_INTERVAL, RATE_LIMIT, KEY, CRYPTO_KEY
+//
+// Приоритет источников: env > flag > default.
+func GetAgentConfig() (AgentConfig, error) {
+	cfg := AgentConfig{}
+
+	flag.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address of the HTTP server (host:port)")
+	flag.IntVar(&cfg.PollIntervalInSec, "p", 2, "runtime metrics polling interval in seconds")
+	flag.IntVar(&cfg.ReportIntervalInSec, "r", 10, "metrics reporting interval in seconds")
+	flag.IntVar(&cfg.RateLimit, "l", 5, "limit of simultaneous outgoing requests")
+	flag.StringVar(&cfg.Key, "k", "", "hash key for request signing")
+	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to public crypto key")
+
+	flag.Parse()
+
+	if serverAddr, ok := os.LookupEnv("ADDRESS"); ok {
+		cfg.ServerAddr = serverAddr
+	}
+
+	if pollIntervalInSec, ok, err := getEnvInt("POLL_INTERVAL"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.PollIntervalInSec = pollIntervalInSec
+	}
+
+	if reportIntervalInSec, ok, err := getEnvInt("REPORT_INTERVAL"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.ReportIntervalInSec = reportIntervalInSec
+	}
+
+	if rateLimit, ok, err := getEnvInt("RATE_LIMIT"); err != nil {
+		return cfg, err
+	} else if ok {
+		cfg.RateLimit = rateLimit
+	}
+
+	if key, ok := os.LookupEnv("KEY"); ok {
+		cfg.Key = key
+	}
+
+	if cryptoKey, ok := os.LookupEnv("CRYPTO_KEY"); ok {
+		cfg.CryptoKey = cryptoKey
+	}
+
+	return cfg, nil
+}

@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/shirou/gopsutil/v4/cpu"
-	agentConfig "github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"go.uber.org/zap"
 )
@@ -48,7 +48,7 @@ type Agent struct {
 }
 
 // New создаёт нового Агента с указанными параметрами конфигурации.
-func New(repo AgentStorage, cfg agentConfig.Config, log *zap.Logger) (*Agent, error) {
+func New(repo AgentStorage, cfg config.AgentConfig, log *zap.Logger) (*Agent, error) {
 	if log == nil {
 		log = zap.NewNop()
 	}

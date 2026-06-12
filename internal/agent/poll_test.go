@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"go.uber.org/zap"
 )
@@ -12,7 +12,7 @@ import (
 // pollRuntime() выставляет RandomValue, добавляет runtime-метрики.
 func TestAgent_PollRuntime_UpdatesMetrics(t *testing.T) {
 	lg := zap.NewNop()
-	cfg := config.Config{
+	cfg := config.AgentConfig{
 		ServerAddr:          "example.com:8080",
 		PollIntervalInSec:   2,
 		ReportIntervalInSec: 10,
@@ -47,7 +47,7 @@ func TestAgent_PollRuntime_UpdatesMetrics(t *testing.T) {
 // pollSystem() сохраняет в хранилище системные метрики.
 func TestAgent_PollSystem_StoresSystemMetrics(t *testing.T) {
 	lg := zap.NewNop()
-	cfg := config.Config{
+	cfg := config.AgentConfig{
 		ServerAddr:          "example.com:8080",
 		PollIntervalInSec:   2,
 		ReportIntervalInSec: 10,
