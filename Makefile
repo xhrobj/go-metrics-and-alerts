@@ -30,9 +30,10 @@ AUDIT_FILE=audit.log
 SERVER=cmd/server/server
 AGENT=cmd/agent/agent
 
-# номер текуего спринта
-SPRINT_NUMBER = 7
+# номер текущего спринта
+SPRINT_NUMBER = 8
 
+# данные о сборке подставляются в бинарники Агента и Сервера через ldflags (см. С7И23)
 BUILD_VERSION = v0.$(SPRINT_NUMBER).0
 BUILD_DATE = $(shell date +%Y-%m-%d)
 BUILD_COMMIT = $(shell git rev-parse --short HEAD)
