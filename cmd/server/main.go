@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,8 +11,6 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	"database/sql"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/buildinfo"
@@ -62,101 +61,30 @@ func run() error {
 		return err
 	}
 
-	var db *sql.DB
-	if cfg.DatabaseDSN != "" {
-		db, err = sql.Open("pgx", cfg.DatabaseDSN)
-		if err != nil {
-			return err
-		}
+	db, err := openDatabase(cfg, lg)
+	if err != nil {
+		return err
+	}
+	if db != nil {
 		defer func() {
 			_ = db.Close()
 		}()
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-		defer cancel()
-
-		if err := db.PingContext(ctx); err != nil {
-			return err
-		}
-
-		lg.Debug("database connected")
-
-		if err := migrations.RunMigrations(db); err != nil {
-			return err
-		}
-	} else {
-		lg.Debug("database disabled")
 	}
 
-	var repo service.MetricsStorage
-	var memRepo *repository.MemStorage
-
-	if db != nil {
-		repo = repository.NewPostgresStorage(db)
-	} else {
-		memRepo = repository.NewMemStorage()
-		repo = memRepo
-	}
-
+	repo, memRepo := newMetricsStorage(db)
 	svc := service.NewMetricsService(repo)
 
-	if memRepo != nil {
-		store := repository.NewFileStore(cfg.FileStoragePath)
-
-		if cfg.Restore {
-			if err := store.Load(memRepo); err != nil {
-				return err
-			}
-		}
-
-		if cfg.StoreIntervalInSec == 0 {
-			svc.EnableSyncSave(store)
-		} else if cfg.StoreIntervalInSec > 0 {
-			go func() {
-				ticker := time.NewTicker(time.Duration(cfg.StoreIntervalInSec) * time.Second)
-				defer ticker.Stop()
-
-				for range ticker.C {
-					if err := store.Save(context.Background(), memRepo); err != nil {
-						lg.Error(
-							"failed to save metrics to file",
-							zap.String("path", cfg.FileStoragePath),
-							zap.Error(err),
-						)
-					}
-				}
-			}()
-		} else {
-			return fmt.Errorf("store interval in seconds must be >= 0, got %d", cfg.StoreIntervalInSec)
-		}
+	if err := setupFilePersistence(cfg, svc, memRepo, lg); err != nil {
+		return err
 	}
 
 	h := handler.New(svc, db)
 
-	if cfg.AuditFile != "" || cfg.AuditURL != "" {
-		auditDispatcher := audit.NewAuditor()
-
-		if cfg.AuditFile != "" {
-			fileObserver, err := audit.NewFileObserver(cfg.AuditFile)
-			if err != nil {
-				return err
-			}
-
-			defer func() {
-				if err := fileObserver.Close(); err != nil {
-					lg.Error("failed to close audit file", zap.Error(err))
-				}
-			}()
-
-			auditDispatcher.Subscribe(fileObserver)
-		}
-
-		if cfg.AuditURL != "" {
-			auditDispatcher.Subscribe(audit.NewRemoteObserver(cfg.AuditURL))
-		}
-
-		h.EnableAudit(auditDispatcher, lg)
+	cleanupAudit, err := setupAudit(cfg, h, lg)
+	if err != nil {
+		return err
 	}
+	defer cleanupAudit()
 
 	r := router.New(h, lg, router.Options{
 		HashKey: cfg.Key,
@@ -172,9 +100,135 @@ func run() error {
 	return http.ListenAndServe(cfg.ServerAddr, r)
 }
 
+func openDatabase(cfg config.ServerConfig, lg *zap.Logger) (*sql.DB, error) {
+	if cfg.DatabaseDSN == "" {
+		lg.Debug("database disabled")
+		return nil, nil
+	}
+
+	db, err := sql.Open("pgx", cfg.DatabaseDSN)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	lg.Debug("database connected")
+
+	if err := migrations.RunMigrations(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return db, nil
+}
+
+func newMetricsStorage(db *sql.DB) (service.MetricsStorage, *repository.MemStorage) {
+	if db != nil {
+		return repository.NewPostgresStorage(db), nil
+	}
+
+	memRepo := repository.NewMemStorage()
+
+	return memRepo, memRepo
+}
+
+func setupFilePersistence(
+	cfg config.ServerConfig,
+	svc *service.MetricsService,
+	memRepo *repository.MemStorage,
+	lg *zap.Logger,
+) error {
+	if memRepo == nil {
+		return nil
+	}
+
+	store := repository.NewFileStore(cfg.FileStoragePath)
+
+	if cfg.Restore {
+		if err := store.Load(memRepo); err != nil {
+			return err
+		}
+	}
+
+	switch {
+	case cfg.StoreIntervalInSec == 0:
+		svc.EnableSyncSave(store)
+
+	case cfg.StoreIntervalInSec > 0:
+		go func() {
+			ticker := time.NewTicker(
+				time.Duration(cfg.StoreIntervalInSec) * time.Second,
+			)
+			defer ticker.Stop()
+
+			for range ticker.C {
+				if err := store.Save(context.Background(), memRepo); err != nil {
+					lg.Error(
+						"failed to save metrics to file",
+						zap.String("path", cfg.FileStoragePath),
+						zap.Error(err),
+					)
+				}
+			}
+		}()
+
+	default:
+		return fmt.Errorf(
+			"store interval in seconds must be >= 0, got %d",
+			cfg.StoreIntervalInSec,
+		)
+	}
+
+	return nil
+}
+
+func setupAudit(
+	cfg config.ServerConfig,
+	h *handler.Handler,
+	lg *zap.Logger,
+) (func(), error) {
+	cleanup := func() {}
+
+	if cfg.AuditFile == "" && cfg.AuditURL == "" {
+		return cleanup, nil
+	}
+
+	auditDispatcher := audit.NewAuditor()
+
+	if cfg.AuditFile != "" {
+		fileObserver, err := audit.NewFileObserver(cfg.AuditFile)
+		if err != nil {
+			return nil, err
+		}
+
+		cleanup = func() {
+			if err := fileObserver.Close(); err != nil {
+				lg.Error("failed to close audit file", zap.Error(err))
+			}
+		}
+
+		auditDispatcher.Subscribe(fileObserver)
+	}
+
+	if cfg.AuditURL != "" {
+		auditDispatcher.Subscribe(audit.NewRemoteObserver(cfg.AuditURL))
+	}
+
+	h.EnableAudit(auditDispatcher, lg)
+
+	return cleanup, nil
+}
+
 func printBanner(w io.Writer) error {
 	const banner = `
-   _____          __         .__
+   _____          __         .__                _________
   /     \   _____/  |________|__| ____   ______/   _____/ ______________  __ ___________
  /  \ /  \_/ __ \   __\_  __ \  |/ ___\ /  ___/\_____  \_/ __ \_  __ \  \/ // __ \_  __ \
 /    Y    \  ___/|  |  |  | \/  \  \___ \___ \ /        \  ___/|  | \/\   /\  ___/|  | \/
