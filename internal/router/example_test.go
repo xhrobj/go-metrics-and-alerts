@@ -13,6 +13,15 @@ import (
 	"go.uber.org/zap"
 )
 
+func newExampleRouter() http.Handler {
+	repo := repository.NewMemStorage()
+	svc := service.NewMetricsService(repo)
+	h := handler.New(svc, nil)
+	log := zap.NewNop()
+
+	return router.New(h, log, router.Options{})
+}
+
 func ExampleNew_legacyEndpoints() {
 	r := newExampleRouter()
 
@@ -89,13 +98,4 @@ func ExampleNew_batchUpdateEndpoint() {
 	// 200
 	// 5.11
 	// 42
-}
-
-func newExampleRouter() http.Handler {
-	repo := repository.NewMemStorage()
-	svc := service.NewMetricsService(repo)
-	h := handler.New(svc, nil)
-	log := zap.NewNop()
-
-	return router.New(h, log, "")
 }

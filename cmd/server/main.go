@@ -151,7 +151,9 @@ func run() error {
 		h.EnableAudit(auditDispatcher, lg)
 	}
 
-	r := router.New(h, lg, cfg.Key)
+	r := router.New(h, lg, router.Options{
+		HashKey: cfg.Key,
+	})
 
 	lg.Info("running server",
 		zap.String("address", cfg.ServerAddr),
