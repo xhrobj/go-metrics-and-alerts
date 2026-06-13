@@ -36,44 +36,51 @@ type AgentConfig struct {
 //
 // Приоритет источников: env > flag > default.
 func GetAgentConfig() (AgentConfig, error) {
+	return parseAgentConfig(os.Args[1:], os.LookupEnv)
+}
+
+func parseAgentConfig(args []string, lookupEnv lookupEnvFunc) (AgentConfig, error) {
 	cfg := AgentConfig{}
+	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
 
-	flag.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address of the HTTP server (host:port)")
-	flag.IntVar(&cfg.PollIntervalInSec, "p", 2, "runtime metrics polling interval in seconds")
-	flag.IntVar(&cfg.ReportIntervalInSec, "r", 10, "metrics reporting interval in seconds")
-	flag.IntVar(&cfg.RateLimit, "l", 5, "limit of simultaneous outgoing requests")
-	flag.StringVar(&cfg.Key, "k", "", "hash key for request signing")
-	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to public crypto key")
+	flags.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address of the HTTP server (host:port)")
+	flags.IntVar(&cfg.PollIntervalInSec, "p", 2, "runtime metrics polling interval in seconds")
+	flags.IntVar(&cfg.ReportIntervalInSec, "r", 10, "metrics reporting interval in seconds")
+	flags.IntVar(&cfg.RateLimit, "l", 5, "limit of simultaneous outgoing requests")
+	flags.StringVar(&cfg.Key, "k", "", "hash key for request signing")
+	flags.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to public crypto key")
 
-	flag.Parse()
+	if err := flags.Parse(args); err != nil {
+		return cfg, err
+	}
 
-	if serverAddr, ok := os.LookupEnv("ADDRESS"); ok {
+	if serverAddr, ok := lookupEnv("ADDRESS"); ok {
 		cfg.ServerAddr = serverAddr
 	}
 
-	if pollIntervalInSec, ok, err := getEnvInt("POLL_INTERVAL"); err != nil {
+	if pollIntervalInSec, ok, err := getEnvInt(lookupEnv, "POLL_INTERVAL"); err != nil {
 		return cfg, err
 	} else if ok {
 		cfg.PollIntervalInSec = pollIntervalInSec
 	}
 
-	if reportIntervalInSec, ok, err := getEnvInt("REPORT_INTERVAL"); err != nil {
+	if reportIntervalInSec, ok, err := getEnvInt(lookupEnv, "REPORT_INTERVAL"); err != nil {
 		return cfg, err
 	} else if ok {
 		cfg.ReportIntervalInSec = reportIntervalInSec
 	}
 
-	if rateLimit, ok, err := getEnvInt("RATE_LIMIT"); err != nil {
+	if rateLimit, ok, err := getEnvInt(lookupEnv, "RATE_LIMIT"); err != nil {
 		return cfg, err
 	} else if ok {
 		cfg.RateLimit = rateLimit
 	}
 
-	if key, ok := os.LookupEnv("KEY"); ok {
+	if key, ok := lookupEnv("KEY"); ok {
 		cfg.Key = key
 	}
 
-	if cryptoKey, ok := os.LookupEnv("CRYPTO_KEY"); ok {
+	if cryptoKey, ok := lookupEnv("CRYPTO_KEY"); ok {
 		cfg.CryptoKey = cryptoKey
 	}
 
