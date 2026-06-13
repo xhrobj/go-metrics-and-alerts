@@ -1,6 +1,11 @@
 package pool
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
+
+var errNilNewObject = errors.New("new object function is nil")
 
 // Resetter описывает объект, состояние которого можно сбросить.
 type Resetter interface {
@@ -13,14 +18,19 @@ type Pool[T Resetter] struct {
 }
 
 // New создаёт Pool для объектов одного типа.
-func New[T Resetter](newObject func() T) *Pool[T] {
+// Возвращает ошибку, если функция создания объектов равна nil.
+func New[T Resetter](newObject func() T) (*Pool[T], error) {
+	if newObject == nil {
+		return nil, errNilNewObject
+	}
+
 	return &Pool[T]{
 		pool: sync.Pool{
 			New: func() any {
 				return newObject()
 			},
 		},
-	}
+	}, nil
 }
 
 // Get возвращает объект из пула.

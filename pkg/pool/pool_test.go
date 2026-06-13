@@ -1,6 +1,9 @@
 package pool
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 type testObject struct {
 	Number     int
@@ -15,6 +18,17 @@ func newTestObject() *testObject {
 	}
 }
 
+func newTestPool(t *testing.T) *Pool[*testObject] {
+	t.Helper()
+
+	p, err := New(newTestObject)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	return p
+}
+
 func (o *testObject) Reset() {
 	o.Number = 0
 	o.Text = ""
@@ -22,10 +36,22 @@ func (o *testObject) Reset() {
 	o.ResetCalls++
 }
 
-func TestPoolGetUsesConstructor(t *testing.T) {
-	pool := New(newTestObject)
+func TestNewRejectsNilConstructor(t *testing.T) {
+	got, err := New[*testObject](nil)
 
-	got := pool.Get()
+	if !errors.Is(err, errNilNewObject) {
+		t.Fatalf("New(nil) error = %v, want %v", err, errNilNewObject)
+	}
+
+	if got != nil {
+		t.Fatalf("New(nil) = %v, want nil", got)
+	}
+}
+
+func TestPoolGetUsesConstructor(t *testing.T) {
+	p := newTestPool(t)
+
+	got := p.Get()
 	if got == nil {
 		t.Fatal("Pool.Get() = nil, want object")
 	}
@@ -38,14 +64,14 @@ func TestPoolGetUsesConstructor(t *testing.T) {
 }
 
 func TestPoolPutResetsObject(t *testing.T) {
-	pool := New(newTestObject)
+	p := newTestPool(t)
 
-	object := pool.Get()
+	object := p.Get()
 	object.Number = 42
 	object.Text = "value"
 	object.Values = append(object.Values, 1, 2, 3)
 
-	pool.Put(object)
+	p.Put(object)
 
 	gotNumber := object.Number
 	wantNumber := 0

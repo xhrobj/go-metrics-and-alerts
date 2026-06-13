@@ -21,7 +21,11 @@ func (b *metricBatch) Reset() {
 }
 
 func ExamplePool() {
-	batchPool := pool.New(newMetricBatch)
+	batchPool, err := pool.New(newMetricBatch)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	// берем временный объект из пула и заполняем его данными
 	batch := batchPool.Get()
