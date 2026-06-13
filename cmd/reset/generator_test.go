@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go/ast"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,7 +100,8 @@ func TestGeneratorHelpers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.got != tt.want {
-				t.Fatalf("got %v, want %v", tt.got, tt.want)
+				t.Errorf("got %v, want %v", tt.got, tt.want)
+				return
 			}
 		})
 	}
@@ -118,9 +120,74 @@ func TestGeneratorHelpers(t *testing.T) {
 		t.Run(tt.path, func(t *testing.T) {
 			got := isGoSource(tt.path)
 			if got != tt.want {
-				t.Fatalf("isGoSource(%q) = %v, want %v", tt.path, got, tt.want)
+				t.Errorf("isGoSource(%q) = %v, want %v", tt.path, got, tt.want)
+				return
 			}
 		})
+	}
+}
+
+func TestHasResetDirective(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{
+			name: "line comment",
+			text: "// generate:reset",
+			want: true,
+		},
+		{
+			name: "block comment",
+			text: "/* generate:reset */",
+			want: true,
+		},
+		{
+			name: "surrounding spaces",
+			text: "//   generate:reset   ",
+			want: true,
+		},
+		{
+			name: "spaces around colon",
+			text: "// generate : reset",
+			want: false,
+		},
+		{
+			name: "space after colon",
+			text: "// generate: reset",
+			want: false,
+		},
+		{
+			name: "unrelated comment",
+			text: "// reset this structure",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			group := &ast.CommentGroup{
+				List: []*ast.Comment{
+					{Text: tt.text},
+				},
+			}
+
+			got := hasResetDirective(group)
+			if got != tt.want {
+				t.Errorf("hasResetDirective() = %v, want %v", got, tt.want)
+				return
+			}
+		})
+	}
+}
+
+func TestHasResetDirectiveWithNilGroup(t *testing.T) {
+	got := hasResetDirective(nil)
+	want := false
+
+	if got != want {
+		t.Errorf("hasResetDirective(nil) = %v, want %v", got, want)
 	}
 }
 
