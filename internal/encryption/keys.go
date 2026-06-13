@@ -43,30 +43,28 @@ func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	// прочитать файл
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read public key: %w", err)
+		return nil, fmt.Errorf("read private key: %w", err)
 	}
 
 	// декодировать pem
 	block, _ := pem.Decode(data)
 	if block == nil {
-		return nil, fmt.Errorf("decode public key PEM")
+		return nil, fmt.Errorf("decode private key PEM")
 	}
 
-	// попробовать PKCS#1
-	if privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
-		return privateKey, nil
+	// попробовать PKCS#8
+	if privateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+		rsaPrivateKey, ok := privateKey.(*rsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("private key is not RSA")
+		}
+		return rsaPrivateKey, nil
 	}
 
-	// если не вышло - попробовать PKCS#8
-	privateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	// если не вышло - попробовать более старый PKCS#1
+	rsaPrivateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("parse private key: %w", err)
-	}
-
-	// проверить что это rsa
-	rsaPrivateKey, ok := privateKey.(*rsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("private key is not RSA")
 	}
 
 	return rsaPrivateKey, nil
