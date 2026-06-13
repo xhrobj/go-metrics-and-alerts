@@ -5,8 +5,6 @@ import (
 	"io"
 )
 
-const notAvailable = "N/A"
-
 // Print выводит информацию о сборке в writer.
 // Пустые значения заменяются на N/A.
 func Print(w io.Writer, version, date, commit string) error {
@@ -26,6 +24,8 @@ func Print(w io.Writer, version, date, commit string) error {
 }
 
 func value(v string) string {
+	const notAvailable = "N/A"
+
 	if v == "" {
 		return notAvailable
 	}

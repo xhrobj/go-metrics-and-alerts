@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -16,13 +16,17 @@ import (
 )
 
 var (
-	buildVersion string
-	buildDate    string
-	buildCommit  string
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
 )
 
 func main() {
 	if err := buildinfo.Print(os.Stdout, buildVersion, buildDate, buildCommit); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := printBanner(os.Stdout); err != nil {
 		log.Fatal(err)
 	}
 
@@ -32,8 +36,6 @@ func main() {
 }
 
 func run() error {
-	echoBanner()
-
 	cfg, err := config.GetAgentConfig()
 	if err != nil {
 		return err
@@ -59,7 +61,7 @@ func run() error {
 	return nil
 }
 
-func echoBanner() {
+func printBanner(w io.Writer) error {
 	const banner = `
    _____          __         .__                 _____                         __   
   /     \   _____/  |________|__| ____   ______ /  _  \    ____   ____   _____/  |_ 
@@ -68,5 +70,7 @@ func echoBanner() {
 \____|__  /\___  >__|  |__|  |__|\___  >____  >____|__  /\___  / \___  >___|  /__|  
         \/     \/                    \/     \/        \//_____/      \/     \/
 	`
-	fmt.Println(banner)
+	_, err := io.WriteString(w, banner)
+
+	return err
 }

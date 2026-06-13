@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -25,13 +26,17 @@ import (
 )
 
 var (
-	buildVersion string
-	buildDate    string
-	buildCommit  string
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
 )
 
 func main() {
 	if err := buildinfo.Print(os.Stdout, buildVersion, buildDate, buildCommit); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := printBanner(os.Stdout); err != nil {
 		log.Fatal(err)
 	}
 
@@ -41,8 +46,6 @@ func main() {
 }
 
 func run() error {
-	echoBanner()
-
 	cfg, err := config.GetServerConfig()
 	if err != nil {
 		return err
@@ -160,7 +163,7 @@ func run() error {
 	return http.ListenAndServe(cfg.ServerAddr, r)
 }
 
-func echoBanner() {
+func printBanner(w io.Writer) error {
 	const banner = `
    _____          __         .__                _________                                
   /     \   _____/  |________|__| ____   ______/   _____/ ______________  __ ___________ 
@@ -169,5 +172,7 @@ func echoBanner() {
 \____|__  /\___  >__|  |__|  |__|\___  >____  >_______  /\___  >__|    \_/  \___  >__|   
         \/     \/                    \/     \/        \/     \/                 \/
 	`
-	fmt.Println(banner)
+	_, err := io.WriteString(w, banner)
+
+	return err
 }
