@@ -23,4 +23,12 @@ func (s *ResettableState) Reset() {
 			resetter.Reset()
 		}
 	}
+	if resetter, ok := any(&s.Status).(interface{ Reset() }); ok {
+		resetter.Reset()
+	} else {
+		var zeroStatus Status
+		s.Status = zeroStatus
+	}
+	var zeroCodes [3]int
+	s.Codes = zeroCodes
 }

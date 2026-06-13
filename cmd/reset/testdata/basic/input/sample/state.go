@@ -1,5 +1,7 @@
 package sample
 
+type Status string
+
 // generate:reset
 type ResettableState struct {
 	Number     int
@@ -10,6 +12,8 @@ type ResettableState struct {
 	Values     []int
 	Labels     map[string]string
 	Child      *NestedState
+	Status     Status
+	Codes      [3]int
 }
 
 type NestedState struct {
