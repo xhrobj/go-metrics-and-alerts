@@ -77,23 +77,32 @@ func (a *Agent) buildMetricsBatch(pollCount int64) ([]model.Metrics, error) {
 }
 
 func (a *Agent) sendMetrics(ctx context.Context, metrics []model.Metrics) error {
-	body, err := json.Marshal(metrics)
+	body, err := prepareRequestBody(metrics)
 	if err != nil {
-		return fmt.Errorf("marshal metrics batch: %w", err)
+		return err
 	}
 
-	compressedBody, err := gzipCompress(body)
-	if err != nil {
-		return fmt.Errorf("gzip compress metrics batch: %w", err)
-	}
+	hashValue := hash.CalcHash(body, a.hashKey)
 
-	hashValue := hash.CalcHash(compressedBody, a.hashKey)
-
-	if err := a.postWithRetry(ctx, "/updates", compressedBody, hashValue); err != nil {
+	if err := a.postWithRetry(ctx, "/updates", body, hashValue); err != nil {
 		return fmt.Errorf("send metrics batch: %w", err)
 	}
 
 	return nil
+}
+
+func prepareRequestBody(metrics []model.Metrics) ([]byte, error) {
+	body, err := json.Marshal(metrics)
+	if err != nil {
+		return nil, fmt.Errorf("marshal metrics batch: %w", err)
+	}
+
+	compressedBody, err := gzipCompress(body)
+	if err != nil {
+		return nil, fmt.Errorf("gzip compress metrics batch: %w", err)
+	}
+
+	return compressedBody, nil
 }
 
 func gzipCompress(data []byte) ([]byte, error) {

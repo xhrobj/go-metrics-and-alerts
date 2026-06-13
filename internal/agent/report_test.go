@@ -1,11 +1,13 @@
 package agent
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -206,5 +208,45 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 
 	if a.pollSinceReport.Load() != 0 {
 		t.Errorf("expected pollSinceReport to be reset to 0, got %d", a.pollSinceReport.Load())
+	}
+}
+
+func TestPrepareRequestBody(t *testing.T) {
+	value := 5.11
+	delta := int64(42)
+
+	want := []model.Metrics{
+		{
+			ID:    "Alloc",
+			MType: model.Gauge,
+			Value: &value,
+		},
+		{
+			ID:    "PollCount",
+			MType: model.Counter,
+			Delta: &delta,
+		},
+	}
+
+	body, err := prepareRequestBody(want)
+	if err != nil {
+		t.Fatalf("prepareRequestBody() error = %v", err)
+	}
+
+	zr, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("gzip.NewReader() error = %v", err)
+	}
+	defer func() {
+		_ = zr.Close()
+	}()
+
+	var got []model.Metrics
+	if err := json.NewDecoder(zr).Decode(&got); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("prepareRequestBody() = %+v, want %+v", got, want)
 	}
 }
