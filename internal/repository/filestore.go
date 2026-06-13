@@ -31,8 +31,8 @@ func NewFileStore(path string) *FileStore {
 }
 
 // Save сохраняет все текущие метрики в файл в формате JSON.
-func (f *FileStore) Save(repo Snapshotter) error {
-	gauges, counters, err := repo.Snapshot(context.Background())
+func (f *FileStore) Save(ctx context.Context, repo Snapshotter) error {
+	gauges, counters, err := repo.Snapshot(ctx)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (f *FileStore) Save(repo Snapshotter) error {
 		return err
 	}
 
-	return os.WriteFile(f.path, data, 0666)
+	return os.WriteFile(f.path, data, 0o666)
 }
 
 // Load загружает метрики из файла в хранилище.

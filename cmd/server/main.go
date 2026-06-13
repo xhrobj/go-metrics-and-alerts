@@ -111,8 +111,9 @@ func run() error {
 				defer ticker.Stop()
 
 				for range ticker.C {
-					if err := store.Save(memRepo); err != nil {
-						lg.Error("failed to save metrics to file",
+					if err := store.Save(context.Background(), memRepo); err != nil {
+						lg.Error(
+							"failed to save metrics to file",
 							zap.String("path", cfg.FileStoragePath),
 							zap.Error(err),
 						)
