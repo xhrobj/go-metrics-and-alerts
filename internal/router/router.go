@@ -1,6 +1,7 @@
 package router
 
 import (
+	"crypto/rsa"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,7 +13,8 @@ import (
 
 // Options содержит настройки HTTP-роутера.
 type Options struct {
-	HashKey string
+	HashKey    string
+	PrivateKey *rsa.PrivateKey
 }
 
 // New создаёт и настраивает HTTP-роутер:
@@ -23,10 +25,13 @@ func New(h *handler.Handler, log *zap.Logger, opts Options) http.Handler {
 	r.Use(chimiddleware.StripSlashes)
 	r.Use(appmiddleware.WithLogging(log))
 
+	// входящий body: hash -> decryption -> gzip -> handler
+
 	if opts.HashKey != "" {
 		r.Use(appmiddleware.WithHash(opts.HashKey))
 	}
 
+	r.Use(appmiddleware.WithDecryption(opts.PrivateKey))
 	r.Use(appmiddleware.WithGzip)
 
 	r.Get("/ping", h.Ping)

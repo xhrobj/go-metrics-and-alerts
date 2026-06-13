@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"database/sql"
 	"errors"
 	"flag"
@@ -15,6 +16,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/buildinfo"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/migrations"
@@ -61,6 +63,11 @@ func run() error {
 		return err
 	}
 
+	privateKey, err := loadPrivateKey(cfg.CryptoKey)
+	if err != nil {
+		return err
+	}
+
 	db, err := openDatabase(cfg, lg)
 	if err != nil {
 		return err
@@ -87,7 +94,8 @@ func run() error {
 	defer cleanupAudit()
 
 	r := router.New(h, lg, router.Options{
-		HashKey: cfg.Key,
+		HashKey:    cfg.Key,
+		PrivateKey: privateKey,
 	})
 
 	lg.Info("running server",
@@ -98,6 +106,19 @@ func run() error {
 	)
 
 	return http.ListenAndServe(cfg.ServerAddr, r)
+}
+
+func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+	if path == "" {
+		return nil, nil
+	}
+
+	privateKey, err := encryption.LoadPrivateKey(path)
+	if err != nil {
+		return nil, fmt.Errorf("load private key: %w", err)
+	}
+
+	return privateKey, nil
 }
 
 func openDatabase(cfg config.ServerConfig, lg *zap.Logger) (*sql.DB, error) {
