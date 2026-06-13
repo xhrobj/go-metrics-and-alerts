@@ -281,10 +281,24 @@ func retryDBOperation(ctx context.Context, op func() error) error {
 			return lastErr
 		}
 
-		time.Sleep(retryDelays[attempt])
+		if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
+			return err
+		}
 	}
 
 	return lastErr
+}
+
+func waitRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func isRetriablePGError(err error) bool {
