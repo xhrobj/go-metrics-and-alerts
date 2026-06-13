@@ -27,20 +27,31 @@ func TestMemStorage_UpdateAndGetMetrics(t *testing.T) {
 		t.Fatalf("GetGauge() got = %v, want %v", gotGauge, wantGauge)
 	}
 
-	if err := storage.UpdateCounter(ctx, "PollCount", 2); err != nil {
+	gotCounter, err := storage.UpdateCounter(ctx, "PollCount", 2)
+	if err != nil {
 		t.Fatalf("UpdateCounter() error = %v", err)
 	}
 
-	if err := storage.UpdateCounter(ctx, "PollCount", 3); err != nil {
+	wantCounter := int64(2)
+	if gotCounter != wantCounter {
+		t.Fatalf("UpdateCounter() got = %v, want %v", gotCounter, wantCounter)
+	}
+
+	gotCounter, err = storage.UpdateCounter(ctx, "PollCount", 3)
+	if err != nil {
 		t.Fatalf("UpdateCounter() error = %v", err)
 	}
 
-	gotCounter, err := storage.GetCounter(ctx, "PollCount")
+	wantCounter = 5
+	if gotCounter != wantCounter {
+		t.Fatalf("UpdateCounter() got = %v, want %v", gotCounter, wantCounter)
+	}
+
+	gotCounter, err = storage.GetCounter(ctx, "PollCount")
 	if err != nil {
 		t.Fatalf("GetCounter() error = %v", err)
 	}
 
-	wantCounter := int64(5)
 	if gotCounter != wantCounter {
 		t.Fatalf("GetCounter() got = %v, want %v", gotCounter, wantCounter)
 	}

@@ -13,7 +13,7 @@ import (
 // используемого сервисом.
 type MetricsStorage interface {
 	UpdateGauge(context.Context, string, float64) error
-	UpdateCounter(context.Context, string, int64) error
+	UpdateCounter(context.Context, string, int64) (int64, error)
 
 	UpdateMetrics(context.Context, []model.Metrics) error
 
@@ -75,20 +75,15 @@ func (m *MetricsService) UpdateMetrics(ctx context.Context, metrics []model.Metr
 	return nil
 }
 
-// UpdateCounter увеличивает значение counter-метрики на delta
-// и возвращает итоговое значение счётчика.
+// UpdateCounter увеличивает значение counter-метрики на delta и возвращает итоговое значение счётчика.
 func (m *MetricsService) UpdateCounter(ctx context.Context, metricName string, delta int64) (int64, error) {
-	if err := m.repo.UpdateCounter(ctx, metricName, delta); err != nil {
+	total, err := m.repo.UpdateCounter(ctx, metricName, delta)
+	if err != nil {
 		return 0, fmt.Errorf("update counter: %w", err)
 	}
 
 	if err := m.saveIfSync(); err != nil {
 		return 0, fmt.Errorf("sync save failed: %w", err)
-	}
-
-	total, err := m.repo.GetCounter(ctx, metricName)
-	if err != nil {
-		return 0, fmt.Errorf("get updated counter: %w", err)
 	}
 
 	return total, nil

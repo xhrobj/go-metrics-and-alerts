@@ -22,7 +22,7 @@ func TestFileStore_SaveAndLoad(t *testing.T) {
 		t.Fatalf("UpdateGauge() error = %v", err)
 	}
 
-	if err := source.UpdateCounter(ctx, "PollCount", 42); err != nil {
+	if _, err := source.UpdateCounter(ctx, "PollCount", 42); err != nil {
 		t.Fatalf("UpdateCounter() error = %v", err)
 	}
 

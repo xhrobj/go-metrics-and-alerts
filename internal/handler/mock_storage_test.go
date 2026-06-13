@@ -20,17 +20,17 @@ func newMockServerStorage() *mockServerStorage {
 	}
 }
 
-func (m *mockServerStorage) UpdateGauge(ctx context.Context, name string, value float64) error {
+func (m *mockServerStorage) UpdateGauge(_ context.Context, name string, value float64) error {
 	m.gauges[name] = value
 	return nil
 }
 
-func (m *mockServerStorage) UpdateCounter(ctx context.Context, name string, delta int64) error {
+func (m *mockServerStorage) UpdateCounter(_ context.Context, name string, delta int64) (int64, error) {
 	m.counters[name] += delta
-	return nil
+	return m.counters[name], nil
 }
 
-func (m *mockServerStorage) UpdateMetrics(ctx context.Context, metrics []model.Metrics) error {
+func (m *mockServerStorage) UpdateMetrics(_ context.Context, metrics []model.Metrics) error {
 	for _, metric := range metrics {
 		switch metric.MType {
 		case model.Gauge:
@@ -42,7 +42,7 @@ func (m *mockServerStorage) UpdateMetrics(ctx context.Context, metrics []model.M
 	return nil
 }
 
-func (m *mockServerStorage) GetGauge(ctx context.Context, name string) (float64, error) {
+func (m *mockServerStorage) GetGauge(_ context.Context, name string) (float64, error) {
 	v, ok := m.gauges[name]
 	if !ok {
 		return 0, repository.ErrMetricNotFound
@@ -50,7 +50,7 @@ func (m *mockServerStorage) GetGauge(ctx context.Context, name string) (float64,
 	return v, nil
 }
 
-func (m *mockServerStorage) GetCounter(ctx context.Context, name string) (int64, error) {
+func (m *mockServerStorage) GetCounter(_ context.Context, name string) (int64, error) {
 	v, ok := m.counters[name]
 	if !ok {
 		return 0, repository.ErrMetricNotFound
@@ -58,6 +58,6 @@ func (m *mockServerStorage) GetCounter(ctx context.Context, name string) (int64,
 	return v, nil
 }
 
-func (m *mockServerStorage) Snapshot(ctx context.Context) (map[string]float64, map[string]int64, error) {
+func (m *mockServerStorage) Snapshot(_ context.Context) (map[string]float64, map[string]int64, error) {
 	return m.gauges, m.counters, nil
 }

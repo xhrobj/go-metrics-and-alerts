@@ -17,7 +17,6 @@ import (
 // AgentStorage описывает хранилище метрик, используемое Агентом.
 type AgentStorage interface {
 	UpdateGauge(context.Context, string, float64) error
-	UpdateCounter(context.Context, string, int64) error
 	Snapshot(context.Context) (map[string]float64, map[string]int64, error)
 }
 

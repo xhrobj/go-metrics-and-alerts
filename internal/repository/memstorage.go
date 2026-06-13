@@ -32,14 +32,15 @@ func (m *MemStorage) UpdateGauge(_ context.Context, metricName string, value flo
 	return nil
 }
 
-// UpdateCounter увеличивает значение counter-метрики на delta.
-func (m *MemStorage) UpdateCounter(_ context.Context, metricName string, delta int64) error {
+// UpdateCounter увеличивает значение counter-метрики на delta
+// и возвращает итоговое значение счётчика.
+func (m *MemStorage) UpdateCounter(_ context.Context, metricName string, delta int64) (int64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.counters[metricName] += delta
 
-	return nil
+	return m.counters[metricName], nil
 }
 
 // UpdateMetrics пакетно обновляет метрики под одной блокировкой.
