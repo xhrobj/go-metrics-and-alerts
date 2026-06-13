@@ -11,9 +11,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
+
+const contentEncryption = "rsa-aes-gcm"
 
 func (a *Agent) report() {
 	// запомним значение и обнулим
@@ -82,6 +85,14 @@ func (a *Agent) sendMetrics(ctx context.Context, metrics []model.Metrics) error 
 		return err
 	}
 
+	if a.publicKey != nil {
+		body, err = encryption.Encrypt(body, a.publicKey)
+		if err != nil {
+			return fmt.Errorf("encrypt metrics batch: %w", err)
+		}
+	}
+
+	// хеш вычисляется от тех же байтов, что будут отправлены Серверу
 	hashValue := hash.CalcHash(body, a.hashKey)
 
 	if err := a.postWithRetry(ctx, "/updates", body, hashValue); err != nil {
@@ -147,6 +158,10 @@ func (a *Agent) postWithRetry(
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Content-Encoding", "gzip").
 			SetBody(body)
+
+		if a.publicKey != nil {
+			req.SetHeader("Content-Encryption", contentEncryption)
+		}
 
 		if hashValue != "" {
 			req.SetHeader("HashSHA256", hashValue)

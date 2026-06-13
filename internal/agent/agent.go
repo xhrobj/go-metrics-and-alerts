@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/rsa"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"go.uber.org/zap"
 )
@@ -33,6 +35,7 @@ type Agent struct {
 	reportIntervalInSec int
 	rateLimit           int
 	hashKey             string
+	publicKey           *rsa.PublicKey
 	client              *resty.Client
 	log                 *zap.Logger
 
@@ -62,6 +65,16 @@ func New(repo AgentStorage, cfg config.AgentConfig, log *zap.Logger) (*Agent, er
 		return nil, fmt.Errorf("rate limit must be > 0, got %d", cfg.RateLimit)
 	}
 
+	var publicKey *rsa.PublicKey
+	if cfg.CryptoKey != "" {
+		loadedPublicKey, err := encryption.LoadPublicKey(cfg.CryptoKey)
+		if err != nil {
+			return nil, fmt.Errorf("load public key: %w", err)
+		}
+
+		publicKey = loadedPublicKey
+	}
+
 	baseURL := cfg.ServerAddr
 	if !strings.Contains(baseURL, "://") {
 		baseURL = "http://" + baseURL
@@ -76,6 +89,7 @@ func New(repo AgentStorage, cfg config.AgentConfig, log *zap.Logger) (*Agent, er
 		reportIntervalInSec: cfg.ReportIntervalInSec,
 		rateLimit:           cfg.RateLimit,
 		hashKey:             cfg.Key,
+		publicKey:           publicKey,
 		client:              resty.New(),
 		log:                 log,
 		sendQueue:           queue,
@@ -109,6 +123,7 @@ func (a *Agent) runRuntimePollLoop(ctx context.Context) {
 		}
 	}
 }
+
 func (a *Agent) runSystemPollLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
 	defer ticker.Stop()

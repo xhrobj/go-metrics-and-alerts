@@ -5,13 +5,17 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"go.uber.org/zap"
@@ -208,6 +212,130 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 
 	if a.pollSinceReport.Load() != 0 {
 		t.Errorf("expected pollSinceReport to be reset to 0, got %d", a.pollSinceReport.Load())
+	}
+}
+
+// TestAgent_SendMetrics_EncryptsBody проверяет, что при заданном публичном ключе
+// Агент шифрует gzip-body и вычисляет хеш от отправляемых зашифрованных байтов.
+func TestAgent_SendMetrics_EncryptsBody(t *testing.T) {
+	const hashKey = "secret-key"
+
+	type capturedRequest struct {
+		body              []byte
+		hash              string
+		contentEncoding   string
+		contentEncryption string
+	}
+
+	requestCh := make(chan capturedRequest, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		requestCh <- capturedRequest{
+			body:              body,
+			hash:              r.Header.Get("HashSHA256"),
+			contentEncoding:   r.Header.Get("Content-Encoding"),
+			contentEncryption: r.Header.Get("Content-Encryption"),
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := config.AgentConfig{
+		ServerAddr:          server.URL,
+		PollIntervalInSec:   2,
+		ReportIntervalInSec: 10,
+		RateLimit:           5,
+		Key:                 hashKey,
+		CryptoKey: filepath.Join(
+			"..",
+			"encryption",
+			"testdata",
+			"public.pem",
+		),
+	}
+
+	a, err := New(repository.NewMemStorage(), cfg, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	value := 5.11
+	delta := int64(42)
+
+	want := []model.Metrics{
+		{
+			ID:    "Alloc",
+			MType: model.Gauge,
+			Value: &value,
+		},
+		{
+			ID:    "PollCount",
+			MType: model.Counter,
+			Delta: &delta,
+		},
+	}
+
+	if err := a.sendMetrics(context.Background(), want); err != nil {
+		t.Fatalf("sendMetrics() error = %v", err)
+	}
+
+	var gotRequest capturedRequest
+	select {
+	case gotRequest = <-requestCh:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for encrypted request")
+	}
+
+	if got, want := gotRequest.contentEncoding, "gzip"; got != want {
+		t.Fatalf("Content-Encoding = %q, want %q", got, want)
+	}
+
+	if got, want := gotRequest.contentEncryption, contentEncryption; got != want {
+		t.Fatalf("Content-Encryption = %q, want %q", got, want)
+	}
+
+	wantHash := hash.CalcHash(gotRequest.body, hashKey)
+	if gotRequest.hash != wantHash {
+		t.Fatalf("HashSHA256 = %q, want %q", gotRequest.hash, wantHash)
+	}
+
+	privateKey, err := encryption.LoadPrivateKey(filepath.Join(
+		"..",
+		"encryption",
+		"testdata",
+		"private.pem",
+	))
+	if err != nil {
+		t.Fatalf("LoadPrivateKey() error = %v", err)
+	}
+
+	compressedBody, err := encryption.Decrypt(gotRequest.body, privateKey)
+	if err != nil {
+		t.Fatalf("Decrypt() error = %v", err)
+	}
+
+	zr, err := gzip.NewReader(bytes.NewReader(compressedBody))
+	if err != nil {
+		t.Fatalf("gzip.NewReader() error = %v", err)
+	}
+	defer func() {
+		_ = zr.Close()
+	}()
+
+	var got []model.Metrics
+	if err := json.NewDecoder(zr).Decode(&got); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("sendMetrics() metrics = %+v, want %+v", got, want)
 	}
 }
 
