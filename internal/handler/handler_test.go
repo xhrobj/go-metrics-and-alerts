@@ -47,6 +47,37 @@ func TestHandler_UpdateJSON_Gauge_OK(t *testing.T) {
 
 }
 
+// UpdateJSON передаёт контекст HTTP-запроса в сервис и хранилище.
+func TestHandler_UpdateJSON_PassesRequestContext(t *testing.T) {
+	type contextKey struct{}
+
+	key := contextKey{}
+	wantContextValue := "request-context"
+
+	repo := newMockServerStorage()
+	srv := service.NewMetricsService(repo)
+	h := handler.New(srv, nil)
+
+	body := `{
+		"id": "Alloc",
+		"type": "gauge",
+		"value": 5.11
+	}`
+
+	rq := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader(body))
+	rq.Header.Set("Content-Type", "application/json")
+	rq = rq.WithContext(context.WithValue(rq.Context(), key, wantContextValue))
+	rs := httptest.NewRecorder()
+
+	h.UpdateJSON(rs, rq)
+
+	require.Equal(t, http.StatusOK, rs.Code)
+	require.NotNil(t, repo.gotContext)
+
+	gotContextValue, _ := repo.gotContext.Value(key).(string)
+	require.Equal(t, wantContextValue, gotContextValue)
+}
+
 // 200 OK для валидного POST /update с типом counter
 func TestHandler_UpdateJSON_Counter_OK(t *testing.T) {
 	repo := newMockServerStorage()
@@ -266,19 +297,60 @@ func TestHandler_UpdatesJSON_OK(t *testing.T) {
 	require.Equal(t, wantCounter, gotCounter)
 }
 
-// 400 Bad Request для POST /updates с битым JSON
-func TestHandler_UpdatesJSON_BadJSON(t *testing.T) {
-	repo := newMockServerStorage()
-	srv := service.NewMetricsService(repo)
+// UpdatesJSON проверяет метод, Content-Type и корректность JSON-запроса.
+func TestHandler_UpdatesJSON_RequestValidation(t *testing.T) {
+	srv := service.NewMetricsService(newMockServerStorage())
 	h := handler.New(srv, nil)
 
-	rq := httptest.NewRequest(http.MethodPost, "/updates", strings.NewReader(`{"broken":`))
-	rq.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
+	tests := []struct {
+		name        string
+		method      string
+		contentType string
+		body        string
+		wantStatus  int
+	}{
+		{
+			name:        "method not allowed",
+			method:      http.MethodGet,
+			contentType: "application/json",
+			body:        `[]`,
+			wantStatus:  http.StatusMethodNotAllowed,
+		},
+		{
+			name:       "missing content type",
+			method:     http.MethodPost,
+			body:       `[]`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:        "bad content type",
+			method:      http.MethodPost,
+			contentType: "text/plain",
+			body:        `[]`,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "bad JSON",
+			method:      http.MethodPost,
+			contentType: "application/json",
+			body:        `{"broken":`,
+			wantStatus:  http.StatusBadRequest,
+		},
+	}
 
-	h.UpdatesJSON(rr, rq)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rq := httptest.NewRequest(tt.method, "/updates", strings.NewReader(tt.body))
+			if tt.contentType != "" {
+				rq.Header.Set("Content-Type", tt.contentType)
+			}
 
-	require.Equal(t, http.StatusBadRequest, rr.Code)
+			rs := httptest.NewRecorder()
+			h.UpdatesJSON(rs, rq)
+
+			require.Equal(t, tt.wantStatus, rs.Code)
+		})
+	}
 }
 
 // 400 Bad Request для POST /updates с невалидной метрикой
@@ -339,6 +411,62 @@ func TestHandler_UpdatesJSON_InvalidMetric_DoesNotApplyBatch(t *testing.T) {
 
 	_, err = srv.GetGauge(context.Background(), "Alloc")
 	require.Error(t, err)
+}
+
+// ValueJSON проверяет метод, Content-Type и корректность JSON-запроса.
+func TestHandler_ValueJSON_RequestValidation(t *testing.T) {
+	srv := service.NewMetricsService(newMockServerStorage())
+	h := handler.New(srv, nil)
+
+	tests := []struct {
+		name        string
+		method      string
+		contentType string
+		body        string
+		wantStatus  int
+	}{
+		{
+			name:        "method not allowed",
+			method:      http.MethodGet,
+			contentType: "application/json",
+			body:        `{"id":"Alloc","type":"gauge"}`,
+			wantStatus:  http.StatusMethodNotAllowed,
+		},
+		{
+			name:       "missing content type",
+			method:     http.MethodPost,
+			body:       `{"id":"Alloc","type":"gauge"}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:        "bad content type",
+			method:      http.MethodPost,
+			contentType: "text/plain",
+			body:        `{"id":"Alloc","type":"gauge"}`,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "bad JSON",
+			method:      http.MethodPost,
+			contentType: "application/json",
+			body:        `{"broken":`,
+			wantStatus:  http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rq := httptest.NewRequest(tt.method, "/value", strings.NewReader(tt.body))
+			if tt.contentType != "" {
+				rq.Header.Set("Content-Type", tt.contentType)
+			}
+
+			rs := httptest.NewRecorder()
+			h.ValueJSON(rs, rq)
+
+			require.Equal(t, tt.wantStatus, rs.Code)
+		})
+	}
 }
 
 // ValueJSON возвращает текущее значение метрики в формате JSON
