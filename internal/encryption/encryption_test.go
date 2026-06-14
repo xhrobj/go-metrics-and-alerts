@@ -1,6 +1,8 @@
 package encryption
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -103,5 +105,45 @@ func TestLoadPrivateKeyInvalidPEM(t *testing.T) {
 	_, err := LoadPrivateKey(path)
 	if err == nil {
 		t.Fatal("LoadPrivateKey() error = nil, want error")
+	}
+}
+
+func TestDecryptInvalidNonceSize(t *testing.T) {
+	pair := testkeys.Generate(t)
+
+	encryptedData, err := Encrypt(
+		[]byte(`{"id":"Alloc","type":"gauge","value":5.11}`),
+		pair.PublicKey,
+	)
+	if err != nil {
+		t.Fatalf("Encrypt() error = %v", err)
+	}
+
+	var env envelope
+	if err := json.Unmarshal(encryptedData, &env); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	wantNonceSize := len(env.Nonce)
+	env.Nonce = env.Nonce[:wantNonceSize-1]
+
+	invalidData, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	_, err = Decrypt(invalidData, pair.PrivateKey)
+	if err == nil {
+		t.Fatal("Decrypt() error = nil, want error")
+	}
+
+	got := err.Error()
+	want := fmt.Sprintf(
+		"invalid nonce size: got %d, want %d",
+		len(env.Nonce),
+		wantNonceSize,
+	)
+	if got != want {
+		t.Errorf("Decrypt() error = %q, want %q", got, want)
 	}
 }

@@ -9,7 +9,7 @@
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
 	run-server run-server-env run-server-crypto \
 	run-agent run-agent-env run-agent-crypto \
-	compose-up compose-down compose-logs \
+	compose-up compose-down compose-logs
 
 # параметры локального PostgreSQL-контейнера
 POSTGRES_USER=metrics
@@ -56,7 +56,7 @@ generate-reset:
 
 # создать (при необходимости) локальную RSA-пару
 crypto-keys:
-	if [ ! -f "$(SERVER_PRIVATE_KEY)" ] || [ ! -f "$(AGENT_PUBLIC_KEY)" ]; then \
+	@if [ ! -f "$(SERVER_PRIVATE_KEY)" ] || [ ! -f "$(AGENT_PUBLIC_KEY)" ]; then \
 		mkdir -p "$(CRYPTO_DIR)"; \
 		openssl genrsa -out "$(SERVER_PRIVATE_KEY)" 2048; \
 		openssl rsa \

@@ -8,6 +8,8 @@ import (
 	"os"
 )
 
+// LoadPublicKey загружает публичный RSA-ключ из PEM-файла.
+// Поддерживаются форматы PKIX и PKCS#1.
 func LoadPublicKey(path string) (*rsa.PublicKey, error) {
 	// прочитать файл
 	data, err := os.ReadFile(path)
@@ -39,6 +41,8 @@ func LoadPublicKey(path string) (*rsa.PublicKey, error) {
 	return rsaPublicKey, nil
 }
 
+// LoadPrivateKey загружает приватный RSA-ключ из PEM-файла.
+// Поддерживаются форматы PKCS#8 и PKCS#1.
 func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	// прочитать файл
 	data, err := os.ReadFile(path)
