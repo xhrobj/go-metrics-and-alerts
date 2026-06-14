@@ -26,6 +26,10 @@ type ServerConfig struct {
 	// Если не задан, подпись не используется.
 	Key string
 
+	// CryptoKey - путь к файлу приватного ключа для расшифровки запросов.
+	// Если не задан, шифрование не используется.
+	CryptoKey string
+
 	// AuditFile - путь к файлу аудита.
 	// Если не задан, аудит в файл отключён.
 	AuditFile string
@@ -34,18 +38,17 @@ type ServerConfig struct {
 	// Если не задан, удалённый аудит отключен.
 	AuditURL string
 
-	// CryptoKey - путь к файлу приватного ключа для расшифровки запросов.
-	// Если не задан, шифрование не используется.
-	CryptoKey string
+	// ConfigPath - путь к JSON-файлу конфигурации.
+	ConfigPath string
 }
 
 // GetServerConfig возвращает конфигурацию HTTP-сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -i -f -r -d -k --crypto-key --audit-file --audit-url
-//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY, CRYPTO_KEY, AUDIT_FILE, AUDIT_URL
+//   - флаги: -a -i -f -r -d -k --crypto-key --audit-file --audit-url -c/--config
+//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY, CRYPTO_KEY, AUDIT_FILE, AUDIT_URL, CONFIG
 //
-// Приоритет источников: env > flag > default.
+// Приоритет источников: env > flag > json > default.
 func GetServerConfig() (ServerConfig, error) {
 	return parseServerConfig(os.Args[1:], os.LookupEnv)
 }
@@ -63,6 +66,8 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 	flags.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to private crypto key")
 	flags.StringVar(&cfg.AuditFile, "audit-file", "", "path to audit log file")
 	flags.StringVar(&cfg.AuditURL, "audit-url", "", "audit receiver URL")
+	flags.StringVar(&cfg.ConfigPath, "c", "", "path to JSON configuration file")
+	flags.StringVar(&cfg.ConfigPath, "config", "", "path to JSON configuration file")
 
 	if err := flags.Parse(args); err != nil {
 		return cfg, err
@@ -106,6 +111,10 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 
 	if auditURL, ok := lookupEnv("AUDIT_URL"); ok {
 		cfg.AuditURL = auditURL
+	}
+
+	if configPath, ok := lookupEnv("CONFIG"); ok {
+		cfg.ConfigPath = configPath
 	}
 
 	return cfg, nil

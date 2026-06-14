@@ -27,6 +27,7 @@ func TestParseAgentConfig(t *testing.T) {
 				"-l", "7",
 				"-k", "flag-key",
 				"--crypto-key", "public.pem",
+				"--config", "agent.json",
 			},
 			want: AgentConfig{
 				ServerAddr:          "agent:8081",
@@ -35,6 +36,20 @@ func TestParseAgentConfig(t *testing.T) {
 				RateLimit:           7,
 				Key:                 "flag-key",
 				CryptoKey:           "public.pem",
+				ConfigPath:          "agent.json",
+			},
+		},
+		{
+			name: "short config flag",
+			args: []string{
+				"-c", "agent.json",
+			},
+			want: AgentConfig{
+				ServerAddr:          "localhost:8080",
+				PollIntervalInSec:   2,
+				ReportIntervalInSec: 10,
+				RateLimit:           5,
+				ConfigPath:          "agent.json",
 			},
 		},
 		{
@@ -46,6 +61,7 @@ func TestParseAgentConfig(t *testing.T) {
 				"-l", "7",
 				"-k", "flag-key",
 				"--crypto-key", "flag-public.pem",
+				"--config", "flag-agent.json",
 			},
 			env: map[string]string{
 				"ADDRESS":         "env-agent:8082",
@@ -54,6 +70,7 @@ func TestParseAgentConfig(t *testing.T) {
 				"RATE_LIMIT":      "8",
 				"KEY":             "env-key",
 				"CRYPTO_KEY":      "env-public.pem",
+				"CONFIG":          "env-agent.json",
 			},
 			want: AgentConfig{
 				ServerAddr:          "env-agent:8082",
@@ -62,6 +79,7 @@ func TestParseAgentConfig(t *testing.T) {
 				RateLimit:           8,
 				Key:                 "env-key",
 				CryptoKey:           "env-public.pem",
+				ConfigPath:          "env-agent.json",
 			},
 		},
 	}

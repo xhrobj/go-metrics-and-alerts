@@ -29,6 +29,7 @@ func TestParseServerConfig(t *testing.T) {
 				"--crypto-key", "private.pem",
 				"--audit-file", "audit.log",
 				"--audit-url", "http://audit",
+				"--config", "server.json",
 			},
 			want: ServerConfig{
 				ServerAddr:         "server:8081",
@@ -40,6 +41,19 @@ func TestParseServerConfig(t *testing.T) {
 				AuditFile:          "audit.log",
 				AuditURL:           "http://audit",
 				CryptoKey:          "private.pem",
+				ConfigPath:         "server.json",
+			},
+		},
+		{
+			name: "short config flag",
+			args: []string{
+				"-c", "server.json",
+			},
+			want: ServerConfig{
+				ServerAddr:         "localhost:8080",
+				StoreIntervalInSec: 300,
+				FileStoragePath:    "metrics-db.json",
+				ConfigPath:         "server.json",
 			},
 		},
 		{
@@ -54,6 +68,7 @@ func TestParseServerConfig(t *testing.T) {
 				"--crypto-key", "flag-private.pem",
 				"--audit-file", "flag-audit.log",
 				"--audit-url", "http://flag-audit",
+				"--config", "flag-server.json",
 			},
 			env: map[string]string{
 				"ADDRESS":           "env-server:8082",
@@ -65,6 +80,7 @@ func TestParseServerConfig(t *testing.T) {
 				"CRYPTO_KEY":        "env-private.pem",
 				"AUDIT_FILE":        "env-audit.log",
 				"AUDIT_URL":         "http://env-audit",
+				"CONFIG":            "env-server.json",
 			},
 			want: ServerConfig{
 				ServerAddr:         "env-server:8082",
@@ -76,6 +92,7 @@ func TestParseServerConfig(t *testing.T) {
 				AuditFile:          "env-audit.log",
 				AuditURL:           "http://env-audit",
 				CryptoKey:          "env-private.pem",
+				ConfigPath:         "env-server.json",
 			},
 		},
 	}
