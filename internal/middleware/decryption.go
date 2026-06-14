@@ -5,20 +5,37 @@ import (
 	"crypto/rsa"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 )
 
+// WithDecryption расшифровывает тело HTTP-запроса приватным RSA-ключом.
+//
+// Если заголовок Content-Encryption отсутствует, запрос передаётся дальше без изменений.
 func WithDecryption(privateKey *rsa.PrivateKey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			algorithm := r.Header.Get(encryption.HeaderContentEncryption)
-			if algorithm == "" {
+			scheme := r.Header.Get(encryption.HeaderContentEncryption)
+			if scheme == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
 
+			if privateKey == nil ||
+				!strings.EqualFold(scheme, encryption.SchemeRSAOAEPWithAESGCM) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			if r.Body == nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
 			encryptedBody, err := io.ReadAll(r.Body)
+			_ = r.Body.Close()
+
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
