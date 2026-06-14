@@ -16,7 +16,7 @@ cmd/agent/agent
 cmd/server/server
 
 # Dependency directories (remove the comment below to include it)
-vendor/
+# vendor/
 
 #runtime data
 **/metrics-db.json

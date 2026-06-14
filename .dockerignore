@@ -1,0 +1,41 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test and coverage files
+*.test
+*.out
+
+# Собранные бинарники
+cmd/agent/agent
+cmd/server/server
+
+# Dependencies
+# vendor/
+
+# Runtime data
+**/metrics-db.json
+*.log
+
+# IDEs
+.idea/
+.vscode/
+
+# macOS
+**/.DS_Store
+__MACOSX/
+
+# Temporary files
+sandbox/
+tools/
+
+# RSA-ключи для запуска Агента/Сервера
+.keys/
+
+# Git
+.git/
+.github/
+.gitignore

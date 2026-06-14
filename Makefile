@@ -8,7 +8,8 @@
 	vet lint staticlint ci \
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
 	run-server run-server-env run-server-crypto \
-	run-agent run-agent-env run-agent-crypto
+	run-agent run-agent-env run-agent-crypto \
+	compose-up compose-down compose-logs \
 
 # параметры локального PostgreSQL-контейнера
 POSTGRES_USER=metrics
@@ -31,7 +32,7 @@ AUDIT_FILE=audit.log
 SERVER=cmd/server/server
 AGENT=cmd/agent/agent
 
-# номер текущего спринта
+# номер текущего спринта (участвует в формировании build version)
 SPRINT_NUMBER = 8
 
 # данные о сборке подставляются в бинарники Агента и Сервера через ldflags (см. С7И23)
@@ -165,3 +166,23 @@ run-agent-crypto: build-agent crypto-keys
 		-l=$(RATE_LIMIT) \
 		-k=$(SECRET_KEY) \
 		--crypto-key=$(AGENT_PUBLIC_KEY)
+
+# собрать и запустить PostgreSQL, Сервер и Агент через Docker Compose
+compose-up: crypto-keys
+	BUILD_VERSION=$(BUILD_VERSION) \
+	BUILD_DATE=$(BUILD_DATE) \
+	BUILD_COMMIT=$(BUILD_COMMIT) \
+	POSTGRES_USER=$(POSTGRES_USER) \
+	POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
+	POSTGRES_DB=$(POSTGRES_DB) \
+	RATE_LIMIT=$(RATE_LIMIT) \
+	SECRET_KEY=$(SECRET_KEY) \
+	docker compose up --build -d
+
+# остановить и удалить контейнеры Docker Compose
+compose-down:
+	docker compose down
+
+# показать логи сервисов Docker Compose
+compose-logs:
+	docker compose logs -f
