@@ -20,9 +20,9 @@ services:
       context: .
       target: server
       args:
-        BUILD_VERSION: ${BUILD_VERSION}
-        BUILD_DATE: ${BUILD_DATE}
-        BUILD_COMMIT: ${BUILD_COMMIT}
+        BUILD_VERSION: ${BUILD_VERSION:-N/A}
+        BUILD_DATE: ${BUILD_DATE:-N/A}
+        BUILD_COMMIT: ${BUILD_COMMIT:-N/A}
     environment:
       ADDRESS: ":8080"
       DATABASE_DSN: "postgres://${POSTGRES_USER:-metrics}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-metricsdb}?sslmode=disable"
@@ -50,9 +50,9 @@ services:
       context: .
       target: agent
       args:
-        BUILD_VERSION: ${BUILD_VERSION}
-        BUILD_DATE: ${BUILD_DATE}
-        BUILD_COMMIT: ${BUILD_COMMIT}
+        BUILD_VERSION: ${BUILD_VERSION:-N/A}
+        BUILD_DATE: ${BUILD_DATE:-N/A}
+        BUILD_COMMIT: ${BUILD_COMMIT:-N/A}
     environment:
       ADDRESS: server:8080
       POLL_INTERVAL: 2
