@@ -20,6 +20,11 @@ import (
 // In order to encrypt reasonable amounts of data a hybrid scheme is commonly used:
 // RSA is used to encrypt a key for a symmetric primitive like AES-GCM.
 
+const (
+	HeaderContentEncryption = "Content-Encryption"
+	SchemeRSAOAEPWithAESGCM = "rsa-aes-gcm"
+)
+
 type envelope struct {
 	Key   []byte `json:"key"`   // AES-ключ зашифрованный RSA public key'ем
 	Nonce []byte `json:"nonce"` // nonce для AES-GCM

@@ -16,8 +16,6 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
 
-const contentEncryption = "rsa-aes-gcm"
-
 func (a *Agent) report() {
 	// запомним значение и обнулим
 	pollCount := a.pollSinceReport.Swap(0)
@@ -160,7 +158,7 @@ func (a *Agent) postWithRetry(
 			SetBody(body)
 
 		if a.publicKey != nil {
-			req.SetHeader("Content-Encryption", contentEncryption)
+			req.SetHeader(encryption.HeaderContentEncryption, encryption.SchemeRSAOAEPWithAESGCM)
 		}
 
 		if hashValue != "" {

@@ -9,15 +9,10 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 )
 
-const (
-	contentEncryptionHeader = "Content-Encryption"
-	hybridEncryption        = "rsa-aes-gcm"
-)
-
 func WithDecryption(privateKey *rsa.PrivateKey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			algorithm := r.Header.Get(contentEncryptionHeader)
+			algorithm := r.Header.Get(encryption.HeaderContentEncryption)
 			if algorithm == "" {
 				next.ServeHTTP(w, r)
 				return
@@ -37,7 +32,7 @@ func WithDecryption(privateKey *rsa.PrivateKey) func(http.Handler) http.Handler 
 
 			r.Body = io.NopCloser(bytes.NewReader(decryptedBody))
 			r.ContentLength = int64(len(decryptedBody))
-			r.Header.Del(contentEncryptionHeader)
+			r.Header.Del(encryption.HeaderContentEncryption)
 
 			next.ServeHTTP(w, r)
 		})

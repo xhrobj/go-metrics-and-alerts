@@ -240,7 +240,7 @@ func TestAgent_SendMetrics_EncryptsBody(t *testing.T) {
 			body:              body,
 			hash:              r.Header.Get("HashSHA256"),
 			contentEncoding:   r.Header.Get("Content-Encoding"),
-			contentEncryption: r.Header.Get("Content-Encryption"),
+			contentEncryption: r.Header.Get(encryption.HeaderContentEncryption),
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -297,7 +297,8 @@ func TestAgent_SendMetrics_EncryptsBody(t *testing.T) {
 		t.Fatalf("Content-Encoding = %q, want %q", got, want)
 	}
 
-	if got, want := gotRequest.contentEncryption, contentEncryption; got != want {
+	if got, want := gotRequest.contentEncryption,
+		encryption.SchemeRSAOAEPWithAESGCM; got != want {
 		t.Fatalf("Content-Encryption = %q, want %q", got, want)
 	}
 

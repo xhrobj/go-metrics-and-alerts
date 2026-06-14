@@ -51,15 +51,22 @@ func TestWithDecryptionDecryptsBody(t *testing.T) {
 			t.Fatalf("ReadAll() error = %v", err)
 		}
 
-		if value := r.Header.Get(contentEncryptionHeader); value != "" {
-			t.Fatalf("%s = %q, want empty", contentEncryptionHeader, value)
+		if value := r.Header.Get(encryption.HeaderContentEncryption); value != "" {
+			t.Fatalf(
+				"%s = %q, want empty",
+				encryption.HeaderContentEncryption,
+				value,
+			)
 		}
 
 		w.WriteHeader(http.StatusOK)
 	})
 
 	rq := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(encryptedBody))
-	rq.Header.Set(contentEncryptionHeader, hybridEncryption)
+	rq.Header.Set(
+		encryption.HeaderContentEncryption,
+		encryption.SchemeRSAOAEPWithAESGCM,
+	)
 
 	rs := httptest.NewRecorder()
 
@@ -137,7 +144,10 @@ func TestWithDecryptionRejectsWrongPrivateKey(t *testing.T) {
 	})
 
 	rq := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(encryptedBody))
-	rq.Header.Set(contentEncryptionHeader, hybridEncryption)
+	rq.Header.Set(
+		encryption.HeaderContentEncryption,
+		encryption.SchemeRSAOAEPWithAESGCM,
+	)
 
 	rs := httptest.NewRecorder()
 
