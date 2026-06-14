@@ -7,8 +7,8 @@
 	test test-race test-coverage \
 	vet lint staticlint ci \
 	postgres-up postgres-start postgres-stop postgres-rm postgres-connect \
-	run-server run-server-env run-server-crypto \
-	run-agent run-agent-env run-agent-crypto \
+	run-server run-server-env run-server-config run-server-crypto \
+	run-agent run-agent-env run-agent-config run-agent-crypto \
 	compose-up compose-down compose-logs
 
 # параметры локального PostgreSQL-контейнера
@@ -46,6 +46,11 @@ LDFLAGS = -X main.buildVersion=$(BUILD_VERSION) -X main.buildDate=$(BUILD_DATE) 
 CRYPTO_DIR=.keys
 SERVER_PRIVATE_KEY=$(CRYPTO_DIR)/private.pem
 AGENT_PUBLIC_KEY=$(CRYPTO_DIR)/public.pem
+
+# пути к example-конфигам Сервера и Агента
+CONFIGS_DIR := configs
+SERVER_CONFIG := $(CONFIGS_DIR)/server.example.json
+AGENT_CONFIG := $(CONFIGS_DIR)/agent.example.json
 
 show-coverage: test-coverage
 	go tool cover -func=coverage.out | tail -n 1
@@ -142,6 +147,10 @@ run-server: build-server
 run-server-env: build-server
 	ADDRESS=$(SERVER_ADDRESS_ENV) DATABASE_DSN=$(POSTGRES_DSN) KEY=$(SECRET_KEY) AUDIT_FILE=$(AUDIT_FILE) ./$(SERVER)
 
+# собрать и запустить Сервер с параметрами из JSON-файла
+run-server-config: build-server crypto-keys
+	./$(SERVER) --config $(SERVER_CONFIG)
+
 # собрать и запустить Сервер с приватным ключом
 run-server-crypto: build-server crypto-keys
 	./$(SERVER) \
@@ -156,6 +165,10 @@ run-agent: build-agent
 # собрать и запустить Агент с параметрами через переменные окружения
 run-agent-env: build-agent
 	ADDRESS=$(SERVER_ADDRESS_ENV) POLL_INTERVAL=5 REPORT_INTERVAL=15 RATE_LIMIT=$(RATE_LIMIT) KEY=$(SECRET_KEY) ./$(AGENT)
+
+# собрать и запустить Агент с параметрами из JSON-файла
+run-agent-config: build-agent crypto-keys
+	./$(AGENT) --config $(AGENT_CONFIG)
 
 # собрать и запустить Агент с публичным ключом
 run-agent-crypto: build-agent crypto-keys
