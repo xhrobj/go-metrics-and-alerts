@@ -863,7 +863,7 @@ http://localhost:8080/github.com/xhrobj/go-metrics-and-alerts/internal/router#pk
 
 **Результаты**
 
-Добавлена утилита `cmd/staticlint`, которая запускает собственный `multichecker` проекта. Аанализатор `noosexit` запрещает прямой вызов `os.Exit` внутри функции `main` пакета `main`.
+Добавлена утилита `cmd/staticlint`, которая запускает собственный `multichecker` проекта. Анализатор `noosexit` запрещает прямой вызов `os.Exit` внутри функции `main` пакета `main`.
 
 Для запуска `staticlint` добавлена команда:
 
@@ -978,7 +978,7 @@ make clean-generated
 
 ### Инкремент 23
 
-Добавьте в пакеты `cmd/server` и `cmd/agent` (для трека «Сервис сбора метрик и алертинга») глобальные переменные:
+Добавьте в пакеты `cmd/server` и `cmd/agent` глобальные переменные:
 
 - `var buildVersion string`,
 - `var buildDate string`,
