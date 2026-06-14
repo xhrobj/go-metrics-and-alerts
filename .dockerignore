@@ -10,32 +10,35 @@
 *.out
 
 # Собранные бинарники
-cmd/agent/agent
-cmd/server/server
+/cmd/agent/agent
+/cmd/server/server
 
 # Dependencies
-# vendor/
+# /vendor/
 
 # Runtime data
 **/metrics-db.json
 *.log
 
 # IDEs
-.idea/
-.vscode/
+/.idea/
+/.vscode/
 
 # macOS
 **/.DS_Store
 __MACOSX/
 
 # Temporary files
-sandbox/
-tools/
+/sandbox/
+/tools/
 
 # RSA-ключи для запуска Агента/Сервера
-.keys/
+/.keys/
+
+# JSON-конфиги Агента и Сервера (example-конфиги тут не нужны)
+/configs/
 
 # Git
-.git/
-.github/
-.gitignore
+/.git/
+/.github/
+/.gitignore

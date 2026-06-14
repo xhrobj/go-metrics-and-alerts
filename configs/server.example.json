@@ -1,0 +1,11 @@
+{
+"address": "localhost:8080",
+"store_interval": "300s",
+"store_file": "metrics-db.json",
+"restore": false,
+"database_dsn": "postgres://metrics:password@localhost:5432/metricsdb?sslmode=disable",
+"key": "god",
+"crypto_key": ".keys/private.pem",
+"audit_file": "audit.log",
+"audit_url": ""
+}

@@ -46,7 +46,18 @@ type ServerConfig struct {
 //
 // Значения параметров могут быть заданы через:
 //   - флаги: -a -i -f -r -d -k --crypto-key --audit-file --audit-url -c/--config
-//   - переменные окружения: ADDRESS, STORE_INTERVAL, FILE_STORAGE_PATH, RESTORE, DATABASE_DSN, KEY, CRYPTO_KEY, AUDIT_FILE, AUDIT_URL, CONFIG
+//   - переменные окружения:
+//     ADDRESS,
+//     STORE_INTERVAL,
+//     FILE_STORAGE_PATH / STORE_FILE,
+//     RESTORE,
+//     DATABASE_DSN,
+//     KEY,
+//     CRYPTO_KEY,
+//     AUDIT_FILE,
+//     AUDIT_URL,
+//     CONFIG
+//   - JSON-файл конфигурации
 //
 // Приоритет источников: env > flag > json > default.
 func GetServerConfig() (ServerConfig, error) {
@@ -54,31 +65,112 @@ func GetServerConfig() (ServerConfig, error) {
 }
 
 func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, error) {
-	cfg := ServerConfig{}
+	cfg := defaultServerConfig()
+	flagCfg := cfg
+
 	flags := flag.NewFlagSet("server", flag.ContinueOnError)
 
-	flags.StringVar(&cfg.ServerAddr, "a", "localhost:8080", "address and port to run server")
-	flags.IntVar(&cfg.StoreIntervalInSec, "i", 300, "store interval in seconds")
-	flags.StringVar(&cfg.FileStoragePath, "f", "metrics-db.json", "path to metrics storage file")
-	flags.BoolVar(&cfg.Restore, "r", false, "restore metrics from file on startup")
-	flags.StringVar(&cfg.DatabaseDSN, "d", "", "database connection string")
-	flags.StringVar(&cfg.Key, "k", "", "hash key for request signing")
-	flags.StringVar(&cfg.CryptoKey, "crypto-key", "", "path to private crypto key")
-	flags.StringVar(&cfg.AuditFile, "audit-file", "", "path to audit log file")
-	flags.StringVar(&cfg.AuditURL, "audit-url", "", "audit receiver URL")
-	flags.StringVar(&cfg.ConfigPath, "c", "", "path to JSON configuration file")
-	flags.StringVar(&cfg.ConfigPath, "config", "", "path to JSON configuration file")
+	flags.StringVar(&flagCfg.ServerAddr, "a", flagCfg.ServerAddr, "address and port to run server")
+	flags.IntVar(&flagCfg.StoreIntervalInSec, "i", flagCfg.StoreIntervalInSec, "store interval in seconds")
+	flags.StringVar(&flagCfg.FileStoragePath, "f", flagCfg.FileStoragePath, "path to metrics storage file")
+	flags.BoolVar(&flagCfg.Restore, "r", flagCfg.Restore, "restore metrics from file on startup")
+	flags.StringVar(&flagCfg.DatabaseDSN, "d", flagCfg.DatabaseDSN, "database connection string")
+	flags.StringVar(&flagCfg.Key, "k", flagCfg.Key, "hash key for request signing")
+	flags.StringVar(&flagCfg.CryptoKey, "crypto-key", flagCfg.CryptoKey, "path to private crypto key")
+	flags.StringVar(&flagCfg.AuditFile, "audit-file", flagCfg.AuditFile, "path to audit log file")
+	flags.StringVar(&flagCfg.AuditURL, "audit-url", flagCfg.AuditURL, "audit receiver URL")
+	flags.StringVar(&flagCfg.ConfigPath, "c", "", "path to JSON configuration file")
+	flags.StringVar(&flagCfg.ConfigPath, "config", "", "path to JSON configuration file")
 
 	if err := flags.Parse(args); err != nil {
 		return cfg, err
 	}
 
+	setFlags := make(map[string]bool)
+
+	flags.Visit(func(f *flag.Flag) {
+		setFlags[f.Name] = true
+	})
+
+	configPath := flagCfg.ConfigPath
+
+	if value, ok := lookupEnv("CONFIG"); ok {
+		configPath = value
+	}
+
+	cfg.ConfigPath = configPath
+
+	if configPath != "" {
+		if err := loadServerConfigFile(configPath, &cfg); err != nil {
+			return cfg, err
+		}
+	}
+
+	applyServerFlags(&cfg, flagCfg, setFlags)
+
+	// путь выбирается отдельно: CONFIG имеет приоритет над -c/--config
+	cfg.ConfigPath = configPath
+
+	if err := applyServerEnvironment(&cfg, lookupEnv); err != nil {
+		return cfg, err
+	}
+
+	return cfg, nil
+}
+
+func defaultServerConfig() ServerConfig {
+	return ServerConfig{
+		ServerAddr:         "localhost:8080",
+		StoreIntervalInSec: 300,
+		FileStoragePath:    "metrics-db.json",
+	}
+}
+
+func applyServerFlags(cfg *ServerConfig, flagCfg ServerConfig, setFlags map[string]bool) {
+	if setFlags["a"] {
+		cfg.ServerAddr = flagCfg.ServerAddr
+	}
+
+	if setFlags["i"] {
+		cfg.StoreIntervalInSec = flagCfg.StoreIntervalInSec
+	}
+
+	if setFlags["f"] {
+		cfg.FileStoragePath = flagCfg.FileStoragePath
+	}
+
+	if setFlags["r"] {
+		cfg.Restore = flagCfg.Restore
+	}
+
+	if setFlags["d"] {
+		cfg.DatabaseDSN = flagCfg.DatabaseDSN
+	}
+
+	if setFlags["k"] {
+		cfg.Key = flagCfg.Key
+	}
+
+	if setFlags["crypto-key"] {
+		cfg.CryptoKey = flagCfg.CryptoKey
+	}
+
+	if setFlags["audit-file"] {
+		cfg.AuditFile = flagCfg.AuditFile
+	}
+
+	if setFlags["audit-url"] {
+		cfg.AuditURL = flagCfg.AuditURL
+	}
+}
+
+func applyServerEnvironment(cfg *ServerConfig, lookupEnv lookupEnvFunc) error {
 	if serverAddr, ok := lookupEnv("ADDRESS"); ok {
 		cfg.ServerAddr = serverAddr
 	}
 
 	if storeIntervalInSec, ok, err := getEnvInt(lookupEnv, "STORE_INTERVAL"); err != nil {
-		return cfg, err
+		return err
 	} else if ok {
 		cfg.StoreIntervalInSec = storeIntervalInSec
 	}
@@ -87,8 +179,13 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 		cfg.FileStoragePath = fileStoragePath
 	}
 
+	// NOTE: STORE_FILE указан в задании С8И25 (см. корневой README) как новое имя для FILE_STORAGE_PATH
+	if fileStoragePath, ok := lookupEnv("STORE_FILE"); ok {
+		cfg.FileStoragePath = fileStoragePath
+	}
+
 	if restore, ok, err := getEnvBool(lookupEnv, "RESTORE"); err != nil {
-		return cfg, err
+		return err
 	} else if ok {
 		cfg.Restore = restore
 	}
@@ -113,9 +210,5 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 		cfg.AuditURL = auditURL
 	}
 
-	if configPath, ok := lookupEnv("CONFIG"); ok {
-		cfg.ConfigPath = configPath
-	}
-
-	return cfg, nil
+	return nil
 }

@@ -12,27 +12,32 @@
 *.out
 
 # Binaries
-cmd/agent/agent
-cmd/server/server
+/cmd/agent/agent
+/cmd/server/server
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+# /vendor/
 
 #runtime data
 **/metrics-db.json
-/*.log
+*.log
 
 # IDEs directories
-.idea/
-.vscode/
+/.idea/
+/.vscode/
 
 #macOS
 .DS_Store
 __MACOSX/
 
 # tmp files
-sandbox/
-tools/
+/sandbox/
+/tools/
 
 # RSA-ключи для запуска Агента/Сервера
 /.keys/
+
+# JSON-конфиги Агента и Сервера (разрешены только два example-конфига)
+/configs/*
+!/configs/agent.example.json
+!/configs/server.example.json
