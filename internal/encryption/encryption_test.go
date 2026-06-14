@@ -4,10 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption/testkeys"
 )
 
 func TestLoadPublicKey(t *testing.T) {
-	publicKey, err := LoadPublicKey(filepath.Join("testdata", "public.pem"))
+	pair := testkeys.Generate(t)
+
+	publicKey, err := LoadPublicKey(pair.PublicKeyPath)
 	if err != nil {
 		t.Fatalf("LoadPublicKey() error = %v", err)
 	}
@@ -18,7 +22,9 @@ func TestLoadPublicKey(t *testing.T) {
 }
 
 func TestLoadPrivateKey(t *testing.T) {
-	privateKey, err := LoadPrivateKey(filepath.Join("testdata", "private.pem"))
+	pair := testkeys.Generate(t)
+
+	privateKey, err := LoadPrivateKey(pair.PrivateKeyPath)
 	if err != nil {
 		t.Fatalf("LoadPrivateKey() error = %v", err)
 	}
@@ -29,12 +35,14 @@ func TestLoadPrivateKey(t *testing.T) {
 }
 
 func TestEncryptDecryptRoundTrip(t *testing.T) {
-	publicKey, err := LoadPublicKey(filepath.Join("testdata", "public.pem"))
+	pair := testkeys.Generate(t)
+
+	publicKey, err := LoadPublicKey(pair.PublicKeyPath)
 	if err != nil {
 		t.Fatalf("LoadPublicKey() error = %v", err)
 	}
 
-	privateKey, err := LoadPrivateKey(filepath.Join("testdata", "private.pem"))
+	privateKey, err := LoadPrivateKey(pair.PrivateKeyPath)
 	if err != nil {
 		t.Fatalf("LoadPrivateKey() error = %v", err)
 	}
@@ -57,7 +65,9 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 }
 
 func TestDecryptInvalidPayload(t *testing.T) {
-	privateKey, err := LoadPrivateKey(filepath.Join("testdata", "private.pem"))
+	pair := testkeys.Generate(t)
+
+	privateKey, err := LoadPrivateKey(pair.PrivateKeyPath)
 	if err != nil {
 		t.Fatalf("LoadPrivateKey() error = %v", err)
 	}

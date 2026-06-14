@@ -8,10 +8,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption/testkeys"
 )
 
 type trackingReadCloser struct {
@@ -37,29 +37,11 @@ func (failingReadCloser) Close() error {
 // TestWithDecryptionDecryptsBody проверяет передачу расшифрованного body
 // следующему HTTP-handler'у.
 func TestWithDecryptionDecryptsBody(t *testing.T) {
-	publicKey, err := encryption.LoadPublicKey(filepath.Join(
-		"..",
-		"encryption",
-		"testdata",
-		"public.pem",
-	))
-	if err != nil {
-		t.Fatalf("LoadPublicKey() error = %v", err)
-	}
-
-	privateKey, err := encryption.LoadPrivateKey(filepath.Join(
-		"..",
-		"encryption",
-		"testdata",
-		"private.pem",
-	))
-	if err != nil {
-		t.Fatalf("LoadPrivateKey() error = %v", err)
-	}
+	pair := testkeys.Generate(t)
 
 	want := []byte(`{"id":"Alloc","type":"gauge","value":5.11}`)
 
-	encryptedBody, err := encryption.Encrypt(want, publicKey)
+	encryptedBody, err := encryption.Encrypt(want, pair.PublicKey)
 	if err != nil {
 		t.Fatalf("Encrypt() error = %v", err)
 	}
@@ -108,7 +90,7 @@ func TestWithDecryptionDecryptsBody(t *testing.T) {
 
 	rs := httptest.NewRecorder()
 
-	WithDecryption(privateKey)(next).ServeHTTP(rs, rq)
+	WithDecryption(pair.PrivateKey)(next).ServeHTTP(rs, rq)
 
 	if got, want := rs.Code, http.StatusOK; got != want {
 		t.Fatalf("status = %d, want %d", got, want)
@@ -157,27 +139,12 @@ func TestWithDecryptionPassesPlaintextBody(t *testing.T) {
 // TestWithDecryptionRejectsInvalidRequests проверяет отклонение
 // некорректных зашифрованных запросов до вызова следующего handler'а.
 func TestWithDecryptionRejectsInvalidRequests(t *testing.T) {
-	publicKey, err := encryption.LoadPublicKey(filepath.Join(
-		"..",
-		"encryption",
-		"testdata",
-		"public.pem",
-	))
-	if err != nil {
-		t.Fatalf("LoadPublicKey() error = %v", err)
-	}
+	pair := testkeys.Generate(t)
 
-	privateKey, err := encryption.LoadPrivateKey(filepath.Join(
-		"..",
-		"encryption",
-		"testdata",
-		"private.pem",
-	))
-	if err != nil {
-		t.Fatalf("LoadPrivateKey() error = %v", err)
-	}
-
-	encryptedBody, err := encryption.Encrypt([]byte("encrypted data"), publicKey)
+	encryptedBody, err := encryption.Encrypt(
+		[]byte("encrypted data"),
+		pair.PublicKey,
+	)
 	if err != nil {
 		t.Fatalf("Encrypt() error = %v", err)
 	}
@@ -198,7 +165,7 @@ func TestWithDecryptionRejectsInvalidRequests(t *testing.T) {
 		},
 		{
 			name:       "unsupported encryption scheme",
-			privateKey: privateKey,
+			privateKey: pair.PrivateKey,
 			scheme:     "unsupported",
 			body: func() io.ReadCloser {
 				return io.NopCloser(bytes.NewReader(encryptedBody))
@@ -206,7 +173,7 @@ func TestWithDecryptionRejectsInvalidRequests(t *testing.T) {
 		},
 		{
 			name:       "missing body",
-			privateKey: privateKey,
+			privateKey: pair.PrivateKey,
 			scheme:     encryption.SchemeRSAOAEPWithAESGCM,
 			body: func() io.ReadCloser {
 				return nil
@@ -214,7 +181,7 @@ func TestWithDecryptionRejectsInvalidRequests(t *testing.T) {
 		},
 		{
 			name:       "damaged envelope",
-			privateKey: privateKey,
+			privateKey: pair.PrivateKey,
 			scheme:     encryption.SchemeRSAOAEPWithAESGCM,
 			body: func() io.ReadCloser {
 				return io.NopCloser(bytes.NewReader([]byte("damaged envelope")))
@@ -222,7 +189,7 @@ func TestWithDecryptionRejectsInvalidRequests(t *testing.T) {
 		},
 		{
 			name:       "body read error",
-			privateKey: privateKey,
+			privateKey: pair.PrivateKey,
 			scheme:     encryption.SchemeRSAOAEPWithAESGCM,
 			body: func() io.ReadCloser {
 				return failingReadCloser{}
@@ -261,17 +228,12 @@ func TestWithDecryptionRejectsInvalidRequests(t *testing.T) {
 // TestWithDecryptionRejectsWrongPrivateKey проверяет, что тело,
 // зашифрованное для другого RSA-ключа, отклоняется.
 func TestWithDecryptionRejectsWrongPrivateKey(t *testing.T) {
-	publicKey, err := encryption.LoadPublicKey(filepath.Join(
-		"..",
-		"encryption",
-		"testdata",
-		"public.pem",
-	))
-	if err != nil {
-		t.Fatalf("LoadPublicKey() error = %v", err)
-	}
+	pair := testkeys.Generate(t)
 
-	encryptedBody, err := encryption.Encrypt([]byte("encrypted data"), publicKey)
+	encryptedBody, err := encryption.Encrypt(
+		[]byte("encrypted data"),
+		pair.PublicKey,
+	)
 	if err != nil {
 		t.Fatalf("Encrypt() error = %v", err)
 	}

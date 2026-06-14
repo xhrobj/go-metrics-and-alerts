@@ -8,13 +8,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption/testkeys"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
@@ -220,6 +220,8 @@ func TestAgent_Report_SendsCorrectJSONMetrics(t *testing.T) {
 func TestAgent_SendMetrics_EncryptsBody(t *testing.T) {
 	const hashKey = "secret-key"
 
+	pair := testkeys.Generate(t)
+
 	type capturedRequest struct {
 		body              []byte
 		hash              string
@@ -253,12 +255,7 @@ func TestAgent_SendMetrics_EncryptsBody(t *testing.T) {
 		ReportIntervalInSec: 10,
 		RateLimit:           5,
 		Key:                 hashKey,
-		CryptoKey: filepath.Join(
-			"..",
-			"encryption",
-			"testdata",
-			"public.pem",
-		),
+		CryptoKey:           pair.PublicKeyPath,
 	}
 
 	a, err := New(repository.NewMemStorage(), cfg, zap.NewNop())
@@ -307,12 +304,7 @@ func TestAgent_SendMetrics_EncryptsBody(t *testing.T) {
 		t.Fatalf("HashSHA256 = %q, want %q", gotRequest.hash, wantHash)
 	}
 
-	privateKey, err := encryption.LoadPrivateKey(filepath.Join(
-		"..",
-		"encryption",
-		"testdata",
-		"private.pem",
-	))
+	privateKey, err := encryption.LoadPrivateKey(pair.PrivateKeyPath)
 	if err != nil {
 		t.Fatalf("LoadPrivateKey() error = %v", err)
 	}
