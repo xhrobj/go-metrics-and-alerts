@@ -33,25 +33,31 @@ func WithDecryption(privateKey *rsa.PrivateKey) func(http.Handler) http.Handler 
 				return
 			}
 
-			encryptedBody, err := io.ReadAll(r.Body)
-			_ = r.Body.Close()
-
-			if err != nil {
+			if err := decryptRequestBody(r, privateKey); err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-
-			decryptedBody, err := encryption.Decrypt(encryptedBody, privateKey)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			r.Body = io.NopCloser(bytes.NewReader(decryptedBody))
-			r.ContentLength = int64(len(decryptedBody))
-			r.Header.Del(encryption.HeaderContentEncryption)
 
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func decryptRequestBody(r *http.Request, privateKey *rsa.PrivateKey) error {
+	encryptedBody, err := io.ReadAll(r.Body)
+	_ = r.Body.Close()
+	if err != nil {
+		return err
+	}
+
+	decryptedBody, err := encryption.Decrypt(encryptedBody, privateKey)
+	if err != nil {
+		return err
+	}
+
+	r.Body = io.NopCloser(bytes.NewReader(decryptedBody))
+	r.ContentLength = int64(len(decryptedBody))
+	r.Header.Del(encryption.HeaderContentEncryption)
+
+	return nil
 }

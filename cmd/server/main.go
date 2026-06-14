@@ -215,7 +215,9 @@ func setupAudit(
 	h *handler.Handler,
 	lg *zap.Logger,
 ) (func(), error) {
-	cleanup := func() {}
+	cleanup := func() {
+		// NOTE: освобождать ресурсы не требуется, пока файловый наблюдатель аудита не создан
+	}
 
 	if cfg.AuditFile == "" && cfg.AuditURL == "" {
 		return cleanup, nil

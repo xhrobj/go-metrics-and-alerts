@@ -33,43 +33,27 @@ func loadAgentConfigFile(path string, cfg *AgentConfig) error {
 	}
 
 	if fileCfg.PollInterval != nil {
-		pollInterval, err := time.ParseDuration(*fileCfg.PollInterval)
+		pollIntervalInSec, err := parseAgentDurationInSeconds(
+			"poll_interval",
+			*fileCfg.PollInterval,
+		)
 		if err != nil {
-			return fmt.Errorf(
-				"parse poll_interval %q: %w",
-				*fileCfg.PollInterval,
-				err,
-			)
+			return err
 		}
 
-		if pollInterval%time.Second != 0 {
-			return fmt.Errorf(
-				"parse poll_interval %q: duration must contain whole seconds",
-				*fileCfg.PollInterval,
-			)
-		}
-
-		cfg.PollIntervalInSec = int(pollInterval / time.Second)
+		cfg.PollIntervalInSec = pollIntervalInSec
 	}
 
 	if fileCfg.ReportInterval != nil {
-		reportInterval, err := time.ParseDuration(*fileCfg.ReportInterval)
+		reportIntervalInSec, err := parseAgentDurationInSeconds(
+			"report_interval",
+			*fileCfg.ReportInterval,
+		)
 		if err != nil {
-			return fmt.Errorf(
-				"parse report_interval %q: %w",
-				*fileCfg.ReportInterval,
-				err,
-			)
+			return err
 		}
 
-		if reportInterval%time.Second != 0 {
-			return fmt.Errorf(
-				"parse report_interval %q: duration must contain whole seconds",
-				*fileCfg.ReportInterval,
-			)
-		}
-
-		cfg.ReportIntervalInSec = int(reportInterval / time.Second)
+		cfg.ReportIntervalInSec = reportIntervalInSec
 	}
 
 	if fileCfg.RateLimit != nil {
@@ -85,4 +69,21 @@ func loadAgentConfigFile(path string, cfg *AgentConfig) error {
 	}
 
 	return nil
+}
+
+func parseAgentDurationInSeconds(name, value string) (int, error) {
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("parse %s %q: %w", name, value, err)
+	}
+
+	if duration%time.Second != 0 {
+		return 0, fmt.Errorf(
+			"parse %s %q: duration must contain whole seconds",
+			name,
+			value,
+		)
+	}
+
+	return int(duration / time.Second), nil
 }
