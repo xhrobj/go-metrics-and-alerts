@@ -33,3 +33,6 @@ __MACOSX/
 # tmp files
 sandbox/
 tools/
+
+# RSA-ключи для запуска Агента/Сервера
+/.keys/

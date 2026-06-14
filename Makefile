@@ -1,6 +1,7 @@
 .PHONY: \
 	show-coverage \
 	generate-reset \
+	crypto-keys \
 	build build-server build-agent \
 	clean-generated clean \
 	test test-race test-coverage \
@@ -40,9 +41,10 @@ BUILD_COMMIT = $(shell git rev-parse --short HEAD)
 
 LDFLAGS = -X main.buildVersion=$(BUILD_VERSION) -X main.buildDate=$(BUILD_DATE) -X main.buildCommit=$(BUILD_COMMIT)
 
-# тестовые RSA-ключи
-SERVER_PRIVATE_KEY=internal/encryption/testdata/private.pem
-AGENT_PUBLIC_KEY=internal/encryption/testdata/public.pem
+# локальная пара RSA-ключей
+CRYPTO_DIR=.keys
+SERVER_PRIVATE_KEY=$(CRYPTO_DIR)/private.pem
+AGENT_PUBLIC_KEY=$(CRYPTO_DIR)/public.pem
 
 show-coverage: test-coverage
 	go tool cover -func=coverage.out | tail -n 1
@@ -50,6 +52,17 @@ show-coverage: test-coverage
 # запустить генератор reset.gen.go (см. С7И21)
 generate-reset:
 	go run ./cmd/reset
+
+# создать (при необходимости) локальную RSA-пару
+crypto-keys:
+	if [ ! -f "$(SERVER_PRIVATE_KEY)" ] || [ ! -f "$(AGENT_PUBLIC_KEY)" ]; then \
+		mkdir -p "$(CRYPTO_DIR)"; \
+		openssl genrsa -out "$(SERVER_PRIVATE_KEY)" 2048; \
+		openssl rsa \
+			-in "$(SERVER_PRIVATE_KEY)" \
+			-pubout \
+			-out "$(AGENT_PUBLIC_KEY)"; \
+	fi
 
 build: build-server build-agent
 
@@ -129,7 +142,7 @@ run-server-env: build-server
 	ADDRESS=$(SERVER_ADDRESS_ENV) DATABASE_DSN=$(POSTGRES_DSN) KEY=$(SECRET_KEY) AUDIT_FILE=$(AUDIT_FILE) ./$(SERVER)
 
 # собрать и запустить Сервер с приватным ключом
-run-server-crypto: build-server
+run-server-crypto: build-server crypto-keys
 	./$(SERVER) \
 		-a=$(SERVER_ADDRESS_DEFAULT) \
 		-k=$(SECRET_KEY) \
@@ -144,7 +157,7 @@ run-agent-env: build-agent
 	ADDRESS=$(SERVER_ADDRESS_ENV) POLL_INTERVAL=5 REPORT_INTERVAL=15 RATE_LIMIT=$(RATE_LIMIT) KEY=$(SECRET_KEY) ./$(AGENT)
 
 # собрать и запустить Агент с публичным ключом
-run-agent-crypto: build-agent
+run-agent-crypto: build-agent crypto-keys
 	./$(AGENT) \
 		-a=$(SERVER_ADDRESS_DEFAULT) \
 		-p=2 \
