@@ -33,6 +33,3 @@ __MACOSX/
 # tmp files
 sandbox/
 tools/
-
-# Go coverage
-coverage.out

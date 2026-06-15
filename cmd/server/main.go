@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"database/sql"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/buildinfo"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
@@ -22,7 +25,21 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
+	if err := buildinfo.Print(os.Stdout, buildVersion, buildDate, buildCommit); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := printBanner(os.Stdout); err != nil {
+		log.Fatal(err)
+	}
+
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
@@ -144,4 +161,18 @@ func run() error {
 	)
 
 	return http.ListenAndServe(cfg.ServerAddr, r)
+}
+
+func printBanner(w io.Writer) error {
+	const banner = `
+   _____          __         .__                _________                                
+  /     \   _____/  |________|__| ____   ______/   _____/ ______________  __ ___________ 
+ /  \ /  \_/ __ \   __\_  __ \  |/ ___\ /  ___/\_____  \_/ __ \_  __ \  \/ // __ \_  __ \
+/    Y    \  ___/|  |  |  | \/  \  \___ \___ \ /        \  ___/|  | \/\   /\  ___/|  | \/
+\____|__  /\___  >__|  |__|  |__|\___  >____  >_______  /\___  >__|    \_/  \___  >__|   
+        \/     \/                    \/     \/        \/     \/                 \/
+	`
+	_, err := io.WriteString(w, banner)
+
+	return err
 }
