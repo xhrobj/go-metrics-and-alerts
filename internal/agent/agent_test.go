@@ -84,6 +84,50 @@ func TestFlushRestoresPollCountOnSnapshotError(t *testing.T) {
 	}
 }
 
+// TestFlushRestoresPollCountOnSendError проверяет, что при ошибке финальной
+// отправки Агент возвращает PollCount для следующей попытки.
+func TestFlushRestoresPollCountOnSendError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(
+		rs http.ResponseWriter,
+		_ *http.Request,
+	) {
+		rs.WriteHeader(http.StatusBadRequest)
+	}))
+	t.Cleanup(server.Close)
+
+	repo := repository.NewMemStorage()
+	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
+		t.Fatalf("UpdateGauge() error = %v, want nil", err)
+	}
+
+	cfg := config.AgentConfig{
+		ServerAddr:          server.URL,
+		PollIntervalInSec:   2,
+		ReportIntervalInSec: 10,
+		RateLimit:           5,
+	}
+
+	a, err := New(repo, cfg, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New() error = %v, want nil", err)
+	}
+
+	a.pollSinceReport.Store(42)
+
+	err = a.flush(context.Background())
+	if err == nil {
+		t.Fatal("flush() error = nil, want error")
+	}
+
+	if got, want := err.Error(), "send final metrics batch"; !strings.Contains(got, want) {
+		t.Fatalf("flush() error = %q, want error containing %q", got, want)
+	}
+
+	if got, want := a.pollSinceReport.Load(), int64(42); got != want {
+		t.Fatalf("pollSinceReport = %d, want %d", got, want)
+	}
+}
+
 // TestRunDrainsQueueAndSendsFinalSnapshot проверяет, что при shutdown Агент
 // дожидается активной отправки, опустошает очередь и отправляет финальный снимок.
 func TestRunDrainsQueueAndSendsFinalSnapshot(t *testing.T) {

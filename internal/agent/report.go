@@ -23,7 +23,7 @@ func (a *Agent) report() {
 		return
 	}
 
-	metrics, err := a.buildMetricsBatch(pollCount)
+	metrics, err := a.buildMetricsBatch(context.Background(), pollCount)
 	if err != nil {
 		// метод poll() в соседней горутине мог уже подинкрементить этот счетчик,
 		// поэтому не восстановим, а добавим запомненное ранее значение обратно
@@ -47,8 +47,8 @@ func (a *Agent) report() {
 	}
 }
 
-func (a *Agent) buildMetricsBatch(pollCount int64) ([]model.Metrics, error) {
-	gauges, _, err := a.repo.Snapshot(context.Background())
+func (a *Agent) buildMetricsBatch(ctx context.Context, pollCount int64) ([]model.Metrics, error) {
+	gauges, _, err := a.repo.Snapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot metrics: %w", err)
 	}

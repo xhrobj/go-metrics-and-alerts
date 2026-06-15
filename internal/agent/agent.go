@@ -17,7 +17,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const shutdownTimeout = time.Second * 30 // мм но по факту ожидается после ожидания сборщиков ...
+const shutdownTimeout = time.Second * 30
 
 // AgentStorage описывает хранилище метрик, используемое Агентом.
 type AgentStorage interface {
@@ -104,11 +104,9 @@ func New(repo AgentStorage, cfg config.AgentConfig, log *zap.Logger) (*Agent, er
 // сбор runtime-метрик, сбор системных метрик и отправку метрик на Сервер.
 //
 // При отмене контекста ждёт завершения активных операций и
-//
-//	отправляет финальный снимок.
+// отправляет финальный снимок.
 func (a *Agent) Run(ctx context.Context) error {
-	// контект для отправки для воркеров; сборщики будут работать с внешим ctx
-	sendCtx, cancelSend := context.WithCancel(context.Background())
+	sendCtx, cancelSend := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancelSend()
 
 	var pollAndReportWG sync.WaitGroup
@@ -142,30 +140,22 @@ func (a *Agent) Run(ctx context.Context) error {
 	<-ctx.Done()
 	a.log.Info("shutdown signal received")
 
-	// притормозим shutdown и сначала дожидаемся остановики сборщиков и report loop,
-	// чтобы никто больше не записывал метрики и не отправлял задачи в очередь
-	pollAndReportWG.Wait()
-	close(a.sendQueue)
-
 	shutdownCtx, cancelShutdown := context.WithTimeout(
-		context.Background(),
+		context.WithoutCancel(ctx),
 		shutdownTimeout,
 	)
 	defer cancelShutdown()
 
-	sendDone := make(chan struct{})
-	go func() {
-		sendWG.Wait()
-		close(sendDone)
-	}()
-
-	select {
-	case <-sendDone:
-	case <-shutdownCtx.Done():
+	if err := waitForGroup(shutdownCtx, &pollAndReportWG); err != nil {
 		cancelSend()
-		<-sendDone
+		return fmt.Errorf("wait poll and report loops: %w", err)
+	}
 
-		return fmt.Errorf("wait send workers: %w", shutdownCtx.Err())
+	close(a.sendQueue)
+
+	if err := waitForGroup(shutdownCtx, &sendWG); err != nil {
+		cancelSend()
+		return fmt.Errorf("wait send workers: %w", err)
 	}
 
 	if err := a.flush(shutdownCtx); err != nil {
@@ -177,10 +167,26 @@ func (a *Agent) Run(ctx context.Context) error {
 	return nil
 }
 
+func waitForGroup(ctx context.Context, wg *sync.WaitGroup) error {
+	done := make(chan struct{})
+
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (a *Agent) flush(ctx context.Context) error {
 	pollCount := a.pollSinceReport.Swap(0)
 
-	metrics, err := a.buildMetricsBatch(pollCount)
+	metrics, err := a.buildMetricsBatch(ctx, pollCount)
 	if err != nil {
 		a.pollSinceReport.Add(pollCount)
 		return fmt.Errorf("build final metrics batch: %w", err)
