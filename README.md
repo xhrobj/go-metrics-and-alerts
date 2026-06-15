@@ -1081,4 +1081,38 @@ Build commit: <buildCommit> (или "N/A" при отсутствии значе
 - #75. Добавить graceful shutdown для Агента
 - #76. Добавить graceful shutdown для Сервера
 
+**Результаты**
+
+Реализация проверена запуском Агента и Сервера через Docker Compose с последующим завершением контейнеров командой `docker compose down`.
+
+Фрагмент лога подтверждает последовательность graceful shutdown: после получения сигнала Агент выполнил финальную отправку метрик, дождался успешного ответа Сервера и завершился с кодом 0. После этого Сервер также завершился штатно.
+
+Сигнал Агенту -> финальный `POST /updates` со статусом `200` -> штатное завершение Агента -> штатное завершение Сервера:
+
+```text
+...
+
+agent-1     | {"level":"info","ts":1781506587.7904048,"caller":"agent/agent.go:138","msg":"shutdown signal received"}
+server-1    | {"level":"info","ts":1781506587.799356,"caller":"middleware/logging.go:68","msg":"http request completed","uri":"/updates","method":"POST","duration":0.00625025,"status":200,"size":0}
+agent-1     | {"level":"info","ts":1781506587.8001022,"caller":"agent/agent.go:170","msg":"agent stopped"}
+agent-1 exited with code 0
+server-1    | {"level":"info","ts":1781506587.9483736,"caller":"server/main.go:166","msg":"shutdown signal received"}
+server-1    | {"level":"info","ts":1781506587.9486651,"caller":"server/main.go:139","msg":"server stopped"}
+server-1 exited with code 0
+
+...
+```
+
+---
+
+### Итоги спринта 8
+
+<a href="docs/images/sprint8-path.png">
+  <img src="docs/images/previews/sprint8-path.png" alt="Спринт 8 - карта инкрементов">
+</a>
+
+<a href="docs/images/sprint8-evo.png">
+  <img src="docs/images/previews/sprint8-evo.png" alt="Спринт 8 - эволюция сервиса">
+</a>
+
 ---
