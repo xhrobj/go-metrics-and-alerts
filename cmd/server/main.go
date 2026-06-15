@@ -162,7 +162,7 @@ func serve(ctx context.Context, srv *http.Server, listener net.Listener, lg *zap
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(
-		context.Background(),
+		context.WithoutCancel(ctx),
 		shutdownTimeout,
 	)
 	defer cancel()
@@ -259,38 +259,13 @@ func setupFilePersistence(
 		svc.EnableSyncSave(store)
 
 	case cfg.StoreIntervalInSec > 0:
-		stopCh := make(chan struct{})
-		doneCh := make(chan struct{})
-
-		go func() {
-			defer close(doneCh)
-
-			ticker := time.NewTicker(
-				time.Duration(cfg.StoreIntervalInSec) * time.Second,
-			)
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-ticker.C:
-					if err := store.Save(context.Background(), memRepo); err != nil {
-						lg.Error(
-							"failed to save metrics to file",
-							zap.String("path", cfg.FileStoragePath),
-							zap.Error(err),
-						)
-					}
-
-				case <-stopCh:
-					return
-				}
-			}
-		}()
-
-		stopPeriodicSave = func() {
-			close(stopCh)
-			<-doneCh
-		}
+		stopPeriodicSave = startPeriodicSave(
+			store,
+			memRepo,
+			time.Duration(cfg.StoreIntervalInSec)*time.Second,
+			cfg.FileStoragePath,
+			lg,
+		)
 
 	default:
 		return nil, fmt.Errorf(
@@ -312,6 +287,45 @@ func setupFilePersistence(
 	}
 
 	return shutdown, nil
+}
+
+func startPeriodicSave(
+	store *repository.FileStore,
+	memRepo *repository.MemStorage,
+	interval time.Duration,
+	path string,
+	lg *zap.Logger,
+) func() {
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+
+	go func() {
+		defer close(doneCh)
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := store.Save(context.Background(), memRepo); err != nil {
+					lg.Error(
+						"failed to save metrics to file",
+						zap.String("path", path),
+						zap.Error(err),
+					)
+				}
+
+			case <-stopCh:
+				return
+			}
+		}
+	}()
+
+	return func() {
+		close(stopCh)
+		<-doneCh
+	}
 }
 
 func setupAudit(
