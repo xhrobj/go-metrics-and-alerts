@@ -36,7 +36,7 @@ jobs:
       - name: (^_^) Vet
         run: make vet
 
-      - name: (о_0) Run staticlint
+      - name: (о_0) Run staticlint # terribly slow
         run: make staticlint
 
       - name: (^_^) Run tests --race

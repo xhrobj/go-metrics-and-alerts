@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
@@ -28,6 +31,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+const shutdownTimeout = time.Second * 30
+
 var (
 	buildVersion = "N/A"
 	buildDate    = "N/A"
@@ -43,7 +48,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := run(); err != nil {
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+	)
+	defer stop()
+
+	if err := run(ctx); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return
 		}
@@ -52,7 +65,7 @@ func main() {
 	}
 }
 
-func run() error {
+func run(ctx context.Context) error {
 	cfg, err := config.GetServerConfig()
 	if err != nil {
 		return err
@@ -81,10 +94,6 @@ func run() error {
 	repo, memRepo := newMetricsStorage(db)
 	svc := service.NewMetricsService(repo)
 
-	if err := setupFilePersistence(cfg, svc, memRepo, lg); err != nil {
-		return err
-	}
-
 	h := handler.New(svc, db)
 
 	cleanupAudit, err := setupAudit(cfg, h, lg)
@@ -98,6 +107,24 @@ func run() error {
 		PrivateKey: privateKey,
 	})
 
+	listener, err := net.Listen("tcp", cfg.ServerAddr)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = listener.Close()
+	}()
+
+	shutdownPersistence, err := setupFilePersistence(cfg, svc, memRepo, lg)
+	if err != nil {
+		return err
+	}
+
+	srv := &http.Server{
+		Addr:    cfg.ServerAddr,
+		Handler: r,
+	}
+
 	lg.Info("running server",
 		zap.String("address", cfg.ServerAddr),
 		zap.String("fileStoragePath", cfg.FileStoragePath),
@@ -105,7 +132,52 @@ func run() error {
 		zap.Int("storeIntervalInSec", cfg.StoreIntervalInSec),
 	)
 
-	return http.ListenAndServe(cfg.ServerAddr, r)
+	serveErr := serve(ctx, srv, listener, lg)
+	persistenceErr := shutdownPersistence()
+
+	if serveErr == nil && persistenceErr == nil {
+		lg.Info("server stopped")
+	}
+
+	return errors.Join(serveErr, persistenceErr)
+}
+
+func serve(ctx context.Context, srv *http.Server, listener net.Listener, lg *zap.Logger) error {
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- srv.Serve(listener)
+	}()
+
+	select {
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+
+		return err
+
+	case <-ctx.Done():
+		lg.Info("shutdown signal received")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(),
+		shutdownTimeout,
+	)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		_ = srv.Close()
+
+		return fmt.Errorf("shutdown HTTP server: %w", err)
+	}
+
+	if err := <-errCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+
+	return nil
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
@@ -165,49 +237,81 @@ func setupFilePersistence(
 	svc *service.MetricsService,
 	memRepo *repository.MemStorage,
 	lg *zap.Logger,
-) error {
-	if memRepo == nil {
-		return nil
+) (func() error, error) {
+	shutdown := func() error { return nil }
+
+	if memRepo == nil || cfg.FileStoragePath == "" {
+		return shutdown, nil
 	}
 
 	store := repository.NewFileStore(cfg.FileStoragePath)
 
 	if cfg.Restore {
 		if err := store.Load(memRepo); err != nil {
-			return err
+			return nil, err
 		}
 	}
+
+	var stopPeriodicSave func()
 
 	switch {
 	case cfg.StoreIntervalInSec == 0:
 		svc.EnableSyncSave(store)
 
 	case cfg.StoreIntervalInSec > 0:
+		stopCh := make(chan struct{})
+		doneCh := make(chan struct{})
+
 		go func() {
+			defer close(doneCh)
+
 			ticker := time.NewTicker(
 				time.Duration(cfg.StoreIntervalInSec) * time.Second,
 			)
 			defer ticker.Stop()
 
-			for range ticker.C {
-				if err := store.Save(context.Background(), memRepo); err != nil {
-					lg.Error(
-						"failed to save metrics to file",
-						zap.String("path", cfg.FileStoragePath),
-						zap.Error(err),
-					)
+			for {
+				select {
+				case <-ticker.C:
+					if err := store.Save(context.Background(), memRepo); err != nil {
+						lg.Error(
+							"failed to save metrics to file",
+							zap.String("path", cfg.FileStoragePath),
+							zap.Error(err),
+						)
+					}
+
+				case <-stopCh:
+					return
 				}
 			}
 		}()
 
+		stopPeriodicSave = func() {
+			close(stopCh)
+			<-doneCh
+		}
+
 	default:
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"store interval in seconds must be >= 0, got %d",
 			cfg.StoreIntervalInSec,
 		)
 	}
 
-	return nil
+	shutdown = func() error {
+		if stopPeriodicSave != nil {
+			stopPeriodicSave()
+		}
+
+		if err := store.Save(context.Background(), memRepo); err != nil {
+			return fmt.Errorf("save metrics on shutdown: %w", err)
+		}
+
+		return nil
+	}
+
+	return shutdown, nil
 }
 
 func setupAudit(
