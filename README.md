@@ -2,6 +2,7 @@
 
 [![(-_-) Go CI](https://github.com/xhrobj/go-metrics-and-alerts/actions/workflows/go-ci.yml/badge.svg)](https://github.com/xhrobj/go-metrics-and-alerts/actions/workflows/go-ci.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_go-metrics-and-alerts&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_go-metrics-and-alerts)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_go-metrics-and-alerts&metric=coverage)](https://sonarcloud.io/summary/new_code?id=xhrobj_go-metrics-and-alerts)
 
 ## Спринт 1
 
