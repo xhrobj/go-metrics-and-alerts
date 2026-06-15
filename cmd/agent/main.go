@@ -32,7 +32,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := run(); err != nil {
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+	)
+	defer stop()
+
+	if err := run(ctx); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return
 		}
@@ -41,7 +49,7 @@ func main() {
 	}
 }
 
-func run() error {
+func run(ctx context.Context) error {
 	cfg, err := config.GetAgentConfig()
 	if err != nil {
 		return err
@@ -53,19 +61,11 @@ func run() error {
 	}
 
 	repo := repository.NewMemStorage()
-
 	a, err := agent.New(repo, cfg, lg)
+
 	if err != nil {
 		return err
 	}
-
-	ctx, stop := signal.NotifyContext(
-		context.Background(),
-		syscall.SIGTERM,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-	)
-	defer stop()
 
 	return a.Run(ctx)
 }
