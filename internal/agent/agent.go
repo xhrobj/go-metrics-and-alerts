@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"go.uber.org/zap"
 )
+
+const shutdownTimeout = time.Second * 30 // мм но по факту ожидается после ожидания сборщиков ...
 
 // AgentStorage описывает хранилище метрик, используемое Агентом.
 type AgentStorage interface {
@@ -27,7 +30,7 @@ type reportTask struct {
 	pollCount int64
 }
 
-// Agent собирает runtime- и системные метрики и отправляет их на Сервер по HTTP.
+// Agent собирает системные и runtime-метрики и отправляет их на Сервер по HTTP.
 type Agent struct {
 	repo                AgentStorage
 	baseURL             string
@@ -99,15 +102,96 @@ func New(repo AgentStorage, cfg config.AgentConfig, log *zap.Logger) (*Agent, er
 
 // Run запускает независимые горутины:
 // сбор runtime-метрик, сбор системных метрик и отправку метрик на Сервер.
-func (a *Agent) Run(ctx context.Context) {
-	go a.runRuntimePollLoop(ctx)
-	go a.runSystemPollLoop(ctx)
+//
+// При отмене контекста ждёт завершения активных операций и
+//
+//	отправляет финальный снимок.
+func (a *Agent) Run(ctx context.Context) error {
+	// контект для отправки для воркеров; сборщики будут работать с внешим ctx
+	sendCtx, cancelSend := context.WithCancel(context.Background())
+	defer cancelSend()
 
+	var pollAndReportWG sync.WaitGroup
+	pollAndReportWG.Add(3)
+
+	go func() {
+		defer pollAndReportWG.Done()
+		a.runRuntimePollLoop(ctx)
+	}()
+
+	go func() {
+		defer pollAndReportWG.Done()
+		a.runSystemPollLoop(ctx)
+	}()
+
+	go func() {
+		defer pollAndReportWG.Done()
+		a.runReportLoop(ctx)
+	}()
+
+	var sendWG sync.WaitGroup
 	for i := 0; i < a.rateLimit; i++ {
-		go a.runSendWorker(ctx)
+		sendWG.Add(1)
+
+		go func() {
+			defer sendWG.Done()
+			a.runSendWorker(sendCtx)
+		}()
 	}
 
-	a.runReportLoop(ctx)
+	<-ctx.Done()
+	a.log.Info("shutdown signal received")
+
+	// притормозим shutdown и сначала дожидаемся остановики сборщиков и report loop,
+	// чтобы никто больше не записывал метрики и не отправлял задачи в очередь
+	pollAndReportWG.Wait()
+	close(a.sendQueue)
+
+	shutdownCtx, cancelShutdown := context.WithTimeout(
+		context.Background(),
+		shutdownTimeout,
+	)
+	defer cancelShutdown()
+
+	sendDone := make(chan struct{})
+	go func() {
+		sendWG.Wait()
+		close(sendDone)
+	}()
+
+	select {
+	case <-sendDone:
+	case <-shutdownCtx.Done():
+		cancelSend()
+		<-sendDone
+
+		return fmt.Errorf("wait send workers: %w", shutdownCtx.Err())
+	}
+
+	if err := a.flush(shutdownCtx); err != nil {
+		return err
+	}
+
+	a.log.Info("agent stopped")
+
+	return nil
+}
+
+func (a *Agent) flush(ctx context.Context) error {
+	pollCount := a.pollSinceReport.Swap(0)
+
+	metrics, err := a.buildMetricsBatch(pollCount)
+	if err != nil {
+		a.pollSinceReport.Add(pollCount)
+		return fmt.Errorf("build final metrics batch: %w", err)
+	}
+
+	if err := a.sendMetrics(ctx, metrics); err != nil {
+		a.pollSinceReport.Add(pollCount)
+		return fmt.Errorf("send final metrics batch: %w", err)
+	}
+
+	return nil
 }
 
 func (a *Agent) runRuntimePollLoop(ctx context.Context) {

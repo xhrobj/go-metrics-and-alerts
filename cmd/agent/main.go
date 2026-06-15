@@ -53,18 +53,21 @@ func run() error {
 	}
 
 	repo := repository.NewMemStorage()
-	a, err := agent.New(repo, cfg, lg)
 
+	a, err := agent.New(repo, cfg, lg)
 	if err != nil {
 		return err
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+	)
 	defer stop()
 
-	a.Run(ctx)
-
-	return nil
+	return a.Run(ctx)
 }
 
 func printBanner(w io.Writer) error {
