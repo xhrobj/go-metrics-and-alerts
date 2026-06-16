@@ -14,9 +14,8 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
-
-const realIPHeader = "X-Real-IP"
 
 func (a *Agent) report() {
 	// запомним значение и обнулим
@@ -158,7 +157,7 @@ func (a *Agent) postWithRetry(
 			SetContext(ctx).
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Content-Encoding", "gzip").
-			SetHeader(realIPHeader, realIP).
+			SetHeader(protocol.HeaderRealIP, realIP).
 			SetBody(body)
 
 		if a.publicKey != nil {

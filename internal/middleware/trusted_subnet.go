@@ -3,9 +3,9 @@ package middleware
 import (
 	"net"
 	"net/http"
-)
 
-const realIPHeader = "X-Real-IP"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
+)
 
 // WithTrustedSubnet разрешает запросы только от IP-адресов,
 // входящих в доверенную подсеть.
@@ -18,7 +18,7 @@ func WithTrustedSubnet(subnet *net.IPNet) func(http.Handler) http.Handler {
 				return
 			}
 
-			ip := net.ParseIP(r.Header.Get(realIPHeader))
+			ip := net.ParseIP(r.Header.Get(protocol.HeaderRealIP))
 			if ip == nil || !subnet.Contains(ip) {
 				w.WriteHeader(http.StatusForbidden)
 				return

@@ -17,6 +17,7 @@ internal/
 ├── middleware/  # HTTP middleware
 ├── migrations/  # запуск SQL-миграций
 ├── model/       # транспортная модель метрики
+├── protocol/    # общие элементы транспортного протокола
 ├── repository/  # хранилища метрик
 ├── router/      # маршруты и middleware-цепочка
 └── service/     # бизнес-логика метрик

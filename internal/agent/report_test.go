@@ -18,6 +18,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption/testkeys"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"go.uber.org/zap"
 )
@@ -48,7 +49,7 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 			t.Fatalf("expected Content-Encoding gzip, got %q", ce)
 		}
 
-		realIP := r.Header.Get(realIPHeader)
+		realIP := r.Header.Get(protocol.HeaderRealIP)
 		if net.ParseIP(realIP) == nil {
 			t.Fatalf("X-Real-IP = %q, want valid IP address", realIP)
 		}
