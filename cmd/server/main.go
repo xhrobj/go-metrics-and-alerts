@@ -81,6 +81,11 @@ func run(ctx context.Context) error {
 		return err
 	}
 
+	trustedSubnet, err := parseTrustedSubnet(cfg.TrustedSubnet)
+	if err != nil {
+		return err
+	}
+
 	db, err := openDatabase(cfg, lg)
 	if err != nil {
 		return err
@@ -103,8 +108,9 @@ func run(ctx context.Context) error {
 	defer cleanupAudit()
 
 	r := router.New(h, lg, router.Options{
-		HashKey:    cfg.Key,
-		PrivateKey: privateKey,
+		HashKey:       cfg.Key,
+		PrivateKey:    privateKey,
+		TrustedSubnet: trustedSubnet,
 	})
 
 	listener, err := net.Listen("tcp", cfg.ServerAddr)
@@ -191,6 +197,19 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	}
 
 	return privateKey, nil
+}
+
+func parseTrustedSubnet(value string) (*net.IPNet, error) {
+	if value == "" {
+		return nil, nil
+	}
+
+	_, subnet, err := net.ParseCIDR(value)
+	if err != nil {
+		return nil, fmt.Errorf("parse trusted subnet %q: %w", value, err)
+	}
+
+	return subnet, nil
 }
 
 func openDatabase(cfg config.ServerConfig, lg *zap.Logger) (*sql.DB, error) {

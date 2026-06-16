@@ -2,6 +2,7 @@ package router
 
 import (
 	"crypto/rsa"
+	"net"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -13,8 +14,9 @@ import (
 
 // Options содержит настройки HTTP-роутера.
 type Options struct {
-	HashKey    string
-	PrivateKey *rsa.PrivateKey
+	HashKey       string
+	PrivateKey    *rsa.PrivateKey
+	TrustedSubnet *net.IPNet
 }
 
 // New создаёт и настраивает HTTP-роутер:
@@ -39,9 +41,14 @@ func New(h *handler.Handler, log *zap.Logger, opts Options) http.Handler {
 
 	r.Get("/ping", h.Ping)
 
-	r.HandleFunc("/update/{type}/{name}/{value}", h.Update)
-	r.Post("/updates", h.UpdatesJSON)
-	r.Post("/update", h.UpdateJSON)
+	// NOTE: довенную сеть проверяем только при отправке метрик Агентом Серверу (см. С9И27)
+	r.Group(func(r chi.Router) {
+		r.Use(appmiddleware.WithTrustedSubnet(opts.TrustedSubnet))
+
+		r.HandleFunc("/update/{type}/{name}/{value}", h.Update)
+		r.Post("/updates", h.UpdatesJSON)
+		r.Post("/update", h.UpdateJSON)
+	})
 
 	r.Get("/value/{type}/{name}", h.Value)
 	r.Post("/value", h.ValueJSON)

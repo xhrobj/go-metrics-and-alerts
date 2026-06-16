@@ -26,6 +26,7 @@ SERVER_ADDRESS_ENV=localhost:8088
 # параметры локального запуска Сервера и Агента
 RATE_LIMIT=3
 SECRET_KEY=god
+TRUSTED_SUBNET=192.168.1.0/24
 AUDIT_FILE=audit.log
 
 # пути для собранных бинарников Сервера и Агента
@@ -33,7 +34,7 @@ SERVER=cmd/server/server
 AGENT=cmd/agent/agent
 
 # номер текущего спринта (участвует в формировании build version)
-SPRINT_NUMBER = 8
+SPRINT_NUMBER = 9
 
 # данные о сборке подставляются в бинарники Агента и Сервера через ldflags (см. С7И23)
 BUILD_VERSION = v0.$(SPRINT_NUMBER).0
@@ -141,11 +142,21 @@ postgres-connect:
 
 # собрать и запустить Сервер с параметрами командной строки
 run-server: build-server
-	./$(SERVER) -a=$(SERVER_ADDRESS_DEFAULT) -d=$(POSTGRES_DSN) -k=$(SECRET_KEY) --audit-file=$(AUDIT_FILE)
+	./$(SERVER) \
+		-a=$(SERVER_ADDRESS_DEFAULT) \
+		-d=$(POSTGRES_DSN) \
+		-k=$(SECRET_KEY) \
+		-t=$(TRUSTED_SUBNET) \
+		--audit-file=$(AUDIT_FILE)
 
 # собрать и запустить Сервер с параметрами через переменные окружения
 run-server-env: build-server
-	ADDRESS=$(SERVER_ADDRESS_ENV) DATABASE_DSN=$(POSTGRES_DSN) KEY=$(SECRET_KEY) AUDIT_FILE=$(AUDIT_FILE) ./$(SERVER)
+	ADDRESS=$(SERVER_ADDRESS_ENV) \
+	DATABASE_DSN=$(POSTGRES_DSN) \
+	KEY=$(SECRET_KEY) \
+	AUDIT_FILE=$(AUDIT_FILE) \
+	TRUSTED_SUBNET=$(TRUSTED_SUBNET) \
+	./$(SERVER)
 
 # собрать и запустить Сервер с параметрами из JSON-файла
 run-server-config: build-server crypto-keys
@@ -156,7 +167,8 @@ run-server-crypto: build-server crypto-keys
 	./$(SERVER) \
 		-a=$(SERVER_ADDRESS_DEFAULT) \
 		-k=$(SECRET_KEY) \
-		--crypto-key=$(SERVER_PRIVATE_KEY)
+		--crypto-key=$(SERVER_PRIVATE_KEY) \
+		-t=$(TRUSTED_SUBNET)
 
 # собрать и запустить Агент с параметрами командной строки
 run-agent: build-agent
