@@ -6,6 +6,7 @@
   "database_dsn": "",
   "key": "",
   "crypto_key": "",
+  "trusted_subnet": "",
   "audit_file": "",
   "audit_url": ""
 }

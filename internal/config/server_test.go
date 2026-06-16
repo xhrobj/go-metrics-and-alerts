@@ -33,6 +33,7 @@ func TestParseServerConfig(t *testing.T) {
 				"--crypto-key", "private.pem",
 				"--audit-file", "audit.log",
 				"--audit-url", "http://audit",
+				"-t", "192.168.1.0/24",
 			},
 			want: ServerConfig{
 				ServerAddr:         "server:8081",
@@ -44,6 +45,7 @@ func TestParseServerConfig(t *testing.T) {
 				AuditFile:          "audit.log",
 				AuditURL:           "http://audit",
 				CryptoKey:          "private.pem",
+				TrustedSubnet:      "192.168.1.0/24",
 			},
 		},
 		{
@@ -58,6 +60,7 @@ func TestParseServerConfig(t *testing.T) {
 				"--crypto-key", "flag-private.pem",
 				"--audit-file", "flag-audit.log",
 				"--audit-url", "http://flag-audit",
+				"-t", "192.168.1.0/24",
 			},
 			env: map[string]string{
 				"ADDRESS":           "env-server:8082",
@@ -69,6 +72,7 @@ func TestParseServerConfig(t *testing.T) {
 				"CRYPTO_KEY":        "env-private.pem",
 				"AUDIT_FILE":        "env-audit.log",
 				"AUDIT_URL":         "http://env-audit",
+				"TRUSTED_SUBNET":    "10.0.0.0/8",
 			},
 			want: ServerConfig{
 				ServerAddr:         "env-server:8082",
@@ -80,6 +84,7 @@ func TestParseServerConfig(t *testing.T) {
 				AuditFile:          "env-audit.log",
 				AuditURL:           "http://env-audit",
 				CryptoKey:          "env-private.pem",
+				TrustedSubnet:      "10.0.0.0/8",
 			},
 		},
 		{
@@ -120,7 +125,8 @@ func TestParseServerConfigFromFile(t *testing.T) {
 		"key": "json-key",
 		"crypto_key": "json-private.pem",
 		"audit_file": "json-audit.log",
-		"audit_url": "http://json-audit"
+		"audit_url": "http://json-audit",
+		"trusted_subnet": "172.16.0.0/12"
 	}`)
 
 	got, err := parseServerConfig(
@@ -141,6 +147,7 @@ func TestParseServerConfigFromFile(t *testing.T) {
 		CryptoKey:          "json-private.pem",
 		AuditFile:          "json-audit.log",
 		AuditURL:           "http://json-audit",
+		TrustedSubnet:      "172.16.0.0/12",
 		ConfigPath:         configPath,
 	}
 
@@ -184,7 +191,8 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 		"key": "json-key",
 		"crypto_key": "json-private.pem",
 		"audit_file": "json-audit.log",
-		"audit_url": "http://json-audit"
+		"audit_url": "http://json-audit",
+		"trusted_subnet": "172.16.0.0/12"
 	}`)
 
 	got, err := parseServerConfig(
@@ -199,6 +207,7 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 			"--crypto-key", "flag-private.pem",
 			"--audit-file", "flag-audit.log",
 			"--audit-url", "http://flag-audit",
+			"-t", "192.168.1.0/24",
 		},
 		testLookupEnv(nil),
 	)
@@ -216,6 +225,7 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 		CryptoKey:          "flag-private.pem",
 		AuditFile:          "flag-audit.log",
 		AuditURL:           "http://flag-audit",
+		TrustedSubnet:      "192.168.1.0/24",
 		ConfigPath:         configPath,
 	}
 
@@ -234,7 +244,8 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 		"key": "json-key",
 		"crypto_key": "json-private.pem",
 		"audit_file": "json-audit.log",
-		"audit_url": "http://json-audit"
+		"audit_url": "http://json-audit",
+		"trusted_subnet": "172.16.0.0/12"
 	}`)
 
 	got, err := parseServerConfig(
@@ -249,6 +260,7 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 			"--crypto-key", "flag-private.pem",
 			"--audit-file", "flag-audit.log",
 			"--audit-url", "http://flag-audit",
+			"-t", "192.168.1.0/24",
 		},
 		testLookupEnv(map[string]string{
 			"ADDRESS":        "env-server:8085",
@@ -260,6 +272,7 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 			"CRYPTO_KEY":     "env-private.pem",
 			"AUDIT_FILE":     "env-audit.log",
 			"AUDIT_URL":      "http://env-audit",
+			"TRUSTED_SUBNET": "10.0.0.0/8",
 		}),
 	)
 	if err != nil {
@@ -276,6 +289,7 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 		CryptoKey:          "env-private.pem",
 		AuditFile:          "env-audit.log",
 		AuditURL:           "http://env-audit",
+		TrustedSubnet:      "10.0.0.0/8",
 		ConfigPath:         configPath,
 	}
 

@@ -38,6 +38,10 @@ type ServerConfig struct {
 	// Если не задан, удалённый аудит отключен.
 	AuditURL string
 
+	// TrustedSubnet - доверенная подсеть в формате CIDR.
+	// Если не задана, проверка IP-адреса Агента отключена.
+	TrustedSubnet string
+
 	// ConfigPath - путь к JSON-файлу конфигурации.
 	ConfigPath string
 }
@@ -45,7 +49,7 @@ type ServerConfig struct {
 // GetServerConfig возвращает конфигурацию HTTP-сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -i -f -r -d -k --crypto-key --audit-file --audit-url -c/--config
+//   - флаги: -a -i -f -r -d -k --crypto-key --audit-file --audit-url -t -c/--config
 //   - переменные окружения:
 //     ADDRESS,
 //     STORE_INTERVAL,
@@ -56,6 +60,7 @@ type ServerConfig struct {
 //     CRYPTO_KEY,
 //     AUDIT_FILE,
 //     AUDIT_URL,
+//     TRUSTED_SUBNET,
 //     CONFIG
 //   - JSON-файл конфигурации
 //
@@ -79,6 +84,7 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 	flags.StringVar(&flagCfg.CryptoKey, "crypto-key", flagCfg.CryptoKey, "path to private crypto key")
 	flags.StringVar(&flagCfg.AuditFile, "audit-file", flagCfg.AuditFile, "path to audit log file")
 	flags.StringVar(&flagCfg.AuditURL, "audit-url", flagCfg.AuditURL, "audit receiver URL")
+	flags.StringVar(&flagCfg.TrustedSubnet, "t", flagCfg.TrustedSubnet, "trusted subnet in CIDR notation")
 	flags.StringVar(&flagCfg.ConfigPath, "c", "", "path to JSON configuration file")
 	flags.StringVar(&flagCfg.ConfigPath, "config", "", "path to JSON configuration file")
 
@@ -162,6 +168,10 @@ func applyServerFlags(cfg *ServerConfig, flagCfg ServerConfig, setFlags map[stri
 	if setFlags["audit-url"] {
 		cfg.AuditURL = flagCfg.AuditURL
 	}
+
+	if setFlags["t"] {
+		cfg.TrustedSubnet = flagCfg.TrustedSubnet
+	}
 }
 
 func applyServerEnvironment(cfg *ServerConfig, lookupEnv lookupEnvFunc) error {
@@ -208,6 +218,10 @@ func applyServerEnvironment(cfg *ServerConfig, lookupEnv lookupEnvFunc) error {
 
 	if auditURL, ok := lookupEnv("AUDIT_URL"); ok {
 		cfg.AuditURL = auditURL
+	}
+
+	if trustedSubnet, ok := lookupEnv("TRUSTED_SUBNET"); ok {
+		cfg.TrustedSubnet = trustedSubnet
 	}
 
 	return nil
