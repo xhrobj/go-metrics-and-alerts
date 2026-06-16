@@ -16,6 +16,8 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
 
+const realIPHeader = "X-Real-IP"
+
 func (a *Agent) report() {
 	// запомним значение и обнулим
 	pollCount := a.pollSinceReport.Swap(0)
@@ -132,16 +134,17 @@ func gzipCompress(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func isRetriableStatusCode(statusCode int) bool {
-	return statusCode == http.StatusTooManyRequests || (statusCode >= 500 && statusCode < 600)
-}
-
 func (a *Agent) postWithRetry(
 	ctx context.Context,
 	path string,
 	body []byte,
 	hashValue string,
 ) error {
+	realIP, err := localIP()
+	if err != nil {
+		return fmt.Errorf("get local IP: %w", err)
+	}
+
 	retryDelays := []time.Duration{
 		time.Second * 1,
 		time.Second * 3,
@@ -155,6 +158,7 @@ func (a *Agent) postWithRetry(
 			SetContext(ctx).
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Content-Encoding", "gzip").
+			SetHeader(realIPHeader, realIP).
 			SetBody(body)
 
 		if a.publicKey != nil {
@@ -193,6 +197,31 @@ func (a *Agent) postWithRetry(
 	}
 
 	return lastErr
+}
+
+func localIP() (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", fmt.Errorf("get interface addresses: %w", err)
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok || ipNet.IP.IsLoopback() {
+			continue
+		}
+
+		ip := ipNet.IP.To4()
+		if ip != nil {
+			return ip.String(), nil
+		}
+	}
+
+	return "", errors.New("local IPv4 address not found")
+}
+
+func isRetriableStatusCode(statusCode int) bool {
+	return statusCode == http.StatusTooManyRequests || (statusCode >= 500 && statusCode < 600)
 }
 
 func isRetriableAgentError(err error) bool {

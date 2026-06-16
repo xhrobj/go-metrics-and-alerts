@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -45,6 +46,11 @@ func TestAgent_Report_SendsPOSTWithContentType(t *testing.T) {
 		ce := r.Header.Get("Content-Encoding")
 		if ce != "gzip" {
 			t.Fatalf("expected Content-Encoding gzip, got %q", ce)
+		}
+
+		realIP := r.Header.Get(realIPHeader)
+		if net.ParseIP(realIP) == nil {
+			t.Fatalf("X-Real-IP = %q, want valid IP address", realIP)
 		}
 
 		w.WriteHeader(http.StatusOK)
