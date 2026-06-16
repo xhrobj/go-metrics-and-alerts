@@ -27,7 +27,7 @@ func New(h *handler.Handler, log *zap.Logger, opts Options) http.Handler {
 	r.Use(chimiddleware.StripSlashes)
 	r.Use(appmiddleware.WithLogging(log))
 
-	// входящий body: hash -> decryption -> gzip -> handler
+	// logging -> hash -> decryption -> gzip -> [trusted subnet] -> handler
 
 	if opts.HashKey != "" {
 		r.Use(appmiddleware.WithHash(opts.HashKey))
@@ -41,7 +41,7 @@ func New(h *handler.Handler, log *zap.Logger, opts Options) http.Handler {
 
 	r.Get("/ping", h.Ping)
 
-	// NOTE: довенную сеть проверяем только при отправке метрик Агентом Серверу (см. С9И27)
+	// NOTE: доверенную сеть проверяем только при отправке метрик Агентом Серверу (см. С9И27)
 	r.Group(func(r chi.Router) {
 		r.Use(appmiddleware.WithTrustedSubnet(opts.TrustedSubnet))
 

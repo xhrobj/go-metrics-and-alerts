@@ -2,20 +2,29 @@
 
 Пакет содержит загрузку RSA-ключей и гибридное шифрование сообщений с использованием RSA-OAEP и AES-GCM.
 
+## Схема шифрования
+
+Для каждого сообщения Агент:
+
+1. генерирует одноразовый AES-ключ
+2. шифрует данные через AES-GCM
+3. шифрует AES-ключ публичным RSA-ключом через RSA-OAEP
+4. объединяет зашифрованный ключ, nonce и ciphertext в транспортный payload
+
+Сервер выполняет обратные операции приватным RSA-ключом.
+
 ## Ключи для тестов
 
-Пакет `internal/encryption/testkeys` при каждом запуске теста:
+Пакет `internal/encryption/testkeys` при каждом тесте:
 
 - генерирует временную RSA-пару
 - записывает публичный ключ в формате PKIX
 - записывает приватный ключ в формате PKCS#8
 - сохраняет PEM-файлы в `t.TempDir()`
 
-Временные файлы автоматически удаляются после завершения теста.
+Временные файлы автоматически удаляются после теста.
 
 ## Ключи для локального запуска
-
-Локальную RSA-пару для запуска Агента и Сервера можно создать командой:
 
 ```bash
 make crypto-keys
@@ -39,40 +48,27 @@ make run-server-crypto
 make run-agent-crypto
 ```
 
-## Ручная генерация этой пары ключей
+## Ручная генерация ключей
 
-Ну и напоминалка как сгенерить ключи руками (не из `Makefile`).
-
-1. Генерируем приватный RSA-ключ:
+Приватный ключ:
 
 ```bash
-openssl genrsa \
-  -out .keys/private.pem \
-  2048
+openssl genrsa   -out .keys/private.pem   2048
 ```
 
-2. Получаем публичный ключ из приватного:
+Публичный ключ:
 
 ```bash
-openssl rsa \
-  -in .keys/private.pem \
-  -pubout \
-  -out .keys/public.pem
+openssl rsa   -in .keys/private.pem   -pubout   -out .keys/public.pem
 ```
 
-3. Проверка, что публичный ключ соответствует приватному:
+Проверка соответствия пары:
 
 ```bash
-openssl pkey \
-  -in .keys/private.pem \
-  -pubout \
-  -outform DER |
+openssl pkey   -in .keys/private.pem   -pubout   -outform DER |
 openssl sha256
 
-openssl pkey \
-  -pubin \
-  -in .keys/public.pem \
-  -outform DER |
+openssl pkey   -pubin   -in .keys/public.pem   -outform DER |
 openssl sha256
 ```
 

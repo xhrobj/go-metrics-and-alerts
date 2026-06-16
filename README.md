@@ -4,6 +4,10 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_go-metrics-and-alerts&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_go-metrics-and-alerts)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_go-metrics-and-alerts&metric=coverage)](https://sonarcloud.io/summary/new_code?id=xhrobj_go-metrics-and-alerts)
 
+Этот README сохраняет исходные формулировки заданий и историю развития проекта по спринтам и инкрементам. Актуальное описание текущей реализации и способов запуска находится в документации CLI-приложений:
+
+- [Обзор приложений и команд](cmd/README.md)
+
 ## Спринт 1
 
 ### Инкремент 1
