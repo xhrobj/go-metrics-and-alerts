@@ -32,6 +32,10 @@ __MACOSX/
 /sandbox/
 /tools/
 
+# Environment files and local secrets
+.env
+.env.*
+
 # RSA-ключи для запуска Агента/Сервера
 /.keys/
 

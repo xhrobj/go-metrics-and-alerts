@@ -11,23 +11,27 @@
 	run-agent run-agent-env run-agent-config run-agent-crypto \
 	compose-up compose-down compose-logs
 
+# локальные параметры из env-файла
+ENV_FILE ?= .env
+-include $(ENV_FILE)
+
 # параметры локального PostgreSQL-контейнера
-POSTGRES_USER=metrics
-POSTGRES_PASSWORD=password
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=metricsdb
+POSTGRES_USER ?= metrics
+POSTGRES_PASSWORD ?= password
+POSTGRES_HOST ?= localhost
+POSTGRES_PORT ?= 5432
+POSTGRES_DB ?= metricsdb
 POSTGRES_DSN=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
 
 # адреса Сервера для запуска через флаги и переменные окружения
-SERVER_ADDRESS_DEFAULT=localhost:8080
-SERVER_ADDRESS_ENV=localhost:8088
+SERVER_ADDRESS_DEFAULT ?= localhost:8080
+SERVER_ADDRESS_ENV ?= localhost:8088
 
 # параметры локального запуска Сервера и Агента
-RATE_LIMIT=3
-SECRET_KEY=god
-TRUSTED_SUBNET=192.168.1.0/24
-AUDIT_FILE=audit.log
+RATE_LIMIT ?= 3
+SECRET_KEY ?= god
+TRUSTED_SUBNET ?=
+AUDIT_FILE ?= audit.log
 
 # пути для собранных бинарников Сервера и Агента
 SERVER=cmd/server/server
