@@ -158,8 +158,8 @@ run-server-env: build-server
 	ADDRESS=$(SERVER_ADDRESS_ENV) \
 	DATABASE_DSN=$(POSTGRES_DSN) \
 	KEY=$(SECRET_KEY) \
-	AUDIT_FILE=$(AUDIT_FILE) \
 	TRUSTED_SUBNET=$(TRUSTED_SUBNET) \
+	AUDIT_FILE=$(AUDIT_FILE) \
 	./$(SERVER)
 
 # собрать и запустить Сервер с параметрами из JSON-файла

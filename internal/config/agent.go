@@ -26,9 +26,6 @@ type AgentConfig struct {
 	// CryptoKey - путь к файлу публичного ключа для шифрования запросов.
 	// Если не задан, шифрование не используется.
 	CryptoKey string
-
-	// ConfigPath - путь к JSON-файлу конфигурации.
-	ConfigPath string
 }
 
 // GetAgentConfig возвращает конфигурацию агента.
@@ -54,8 +51,10 @@ func parseAgentConfig(args []string, lookupEnv lookupEnvFunc) (AgentConfig, erro
 	flags.IntVar(&flagCfg.RateLimit, "l", flagCfg.RateLimit, "limit of simultaneous outgoing requests")
 	flags.StringVar(&flagCfg.Key, "k", flagCfg.Key, "hash key for request signing")
 	flags.StringVar(&flagCfg.CryptoKey, "crypto-key", flagCfg.CryptoKey, "path to public crypto key")
-	flags.StringVar(&flagCfg.ConfigPath, "c", "", "path to JSON configuration file")
-	flags.StringVar(&flagCfg.ConfigPath, "config", "", "path to JSON configuration file")
+
+	var configPath string
+	flags.StringVar(&configPath, "c", "", "path to JSON configuration file")
+	flags.StringVar(&configPath, "config", "", "path to JSON configuration file")
 
 	if err := flags.Parse(args); err != nil {
 		return cfg, err
@@ -66,12 +65,9 @@ func parseAgentConfig(args []string, lookupEnv lookupEnvFunc) (AgentConfig, erro
 		setFlags[f.Name] = true
 	})
 
-	configPath := flagCfg.ConfigPath
 	if value, ok := lookupEnv("CONFIG"); ok {
 		configPath = value
 	}
-
-	cfg.ConfigPath = configPath
 
 	if configPath != "" {
 		if err := loadAgentConfigFile(configPath, &cfg); err != nil {
@@ -82,6 +78,10 @@ func parseAgentConfig(args []string, lookupEnv lookupEnvFunc) (AgentConfig, erro
 	applyAgentFlags(&cfg, flagCfg, setFlags)
 
 	if err := applyAgentEnvironment(&cfg, lookupEnv); err != nil {
+		return cfg, err
+	}
+
+	if err := validateAgentConfig(cfg); err != nil {
 		return cfg, err
 	}
 

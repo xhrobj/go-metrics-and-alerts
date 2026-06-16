@@ -30,6 +30,10 @@ type ServerConfig struct {
 	// Если не задан, шифрование не используется.
 	CryptoKey string
 
+	// TrustedSubnet - доверенная подсеть в формате CIDR.
+	// Если не задана, проверка IP-адреса Агента отключена.
+	TrustedSubnet string
+
 	// AuditFile - путь к файлу аудита.
 	// Если не задан, аудит в файл отключён.
 	AuditFile string
@@ -37,19 +41,12 @@ type ServerConfig struct {
 	// AuditURL - URL удаленного приёмника аудита.
 	// Если не задан, удалённый аудит отключен.
 	AuditURL string
-
-	// TrustedSubnet - доверенная подсеть в формате CIDR.
-	// Если не задана, проверка IP-адреса Агента отключена.
-	TrustedSubnet string
-
-	// ConfigPath - путь к JSON-файлу конфигурации.
-	ConfigPath string
 }
 
 // GetServerConfig возвращает конфигурацию HTTP-сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -i -f -r -d -k --crypto-key --audit-file --audit-url -t -c/--config
+//   - флаги: -a -i -f -r -d -k --crypto-key -t --audit-file --audit-url -c/--config
 //   - переменные окружения:
 //     ADDRESS,
 //     STORE_INTERVAL,
@@ -58,9 +55,9 @@ type ServerConfig struct {
 //     DATABASE_DSN,
 //     KEY,
 //     CRYPTO_KEY,
+//     TRUSTED_SUBNET,
 //     AUDIT_FILE,
 //     AUDIT_URL,
-//     TRUSTED_SUBNET,
 //     CONFIG
 //   - JSON-файл конфигурации
 //
@@ -82,11 +79,13 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 	flags.StringVar(&flagCfg.DatabaseDSN, "d", flagCfg.DatabaseDSN, "database connection string")
 	flags.StringVar(&flagCfg.Key, "k", flagCfg.Key, "hash key for request signing")
 	flags.StringVar(&flagCfg.CryptoKey, "crypto-key", flagCfg.CryptoKey, "path to private crypto key")
+	flags.StringVar(&flagCfg.TrustedSubnet, "t", flagCfg.TrustedSubnet, "trusted subnet in CIDR notation")
 	flags.StringVar(&flagCfg.AuditFile, "audit-file", flagCfg.AuditFile, "path to audit log file")
 	flags.StringVar(&flagCfg.AuditURL, "audit-url", flagCfg.AuditURL, "audit receiver URL")
-	flags.StringVar(&flagCfg.TrustedSubnet, "t", flagCfg.TrustedSubnet, "trusted subnet in CIDR notation")
-	flags.StringVar(&flagCfg.ConfigPath, "c", "", "path to JSON configuration file")
-	flags.StringVar(&flagCfg.ConfigPath, "config", "", "path to JSON configuration file")
+
+	var configPath string
+	flags.StringVar(&configPath, "c", "", "path to JSON configuration file")
+	flags.StringVar(&configPath, "config", "", "path to JSON configuration file")
 
 	if err := flags.Parse(args); err != nil {
 		return cfg, err
@@ -98,13 +97,9 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 		setFlags[f.Name] = true
 	})
 
-	configPath := flagCfg.ConfigPath
-
 	if value, ok := lookupEnv("CONFIG"); ok {
 		configPath = value
 	}
-
-	cfg.ConfigPath = configPath
 
 	if configPath != "" {
 		if err := loadServerConfigFile(configPath, &cfg); err != nil {
@@ -114,10 +109,11 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 
 	applyServerFlags(&cfg, flagCfg, setFlags)
 
-	// путь выбирается отдельно: CONFIG имеет приоритет над -c/--config
-	cfg.ConfigPath = configPath
-
 	if err := applyServerEnvironment(&cfg, lookupEnv); err != nil {
+		return cfg, err
+	}
+
+	if err := validateServerConfig(cfg); err != nil {
 		return cfg, err
 	}
 
@@ -161,16 +157,16 @@ func applyServerFlags(cfg *ServerConfig, flagCfg ServerConfig, setFlags map[stri
 		cfg.CryptoKey = flagCfg.CryptoKey
 	}
 
+	if setFlags["t"] {
+		cfg.TrustedSubnet = flagCfg.TrustedSubnet
+	}
+
 	if setFlags["audit-file"] {
 		cfg.AuditFile = flagCfg.AuditFile
 	}
 
 	if setFlags["audit-url"] {
 		cfg.AuditURL = flagCfg.AuditURL
-	}
-
-	if setFlags["t"] {
-		cfg.TrustedSubnet = flagCfg.TrustedSubnet
 	}
 }
 
@@ -212,16 +208,16 @@ func applyServerEnvironment(cfg *ServerConfig, lookupEnv lookupEnvFunc) error {
 		cfg.CryptoKey = cryptoKey
 	}
 
+	if trustedSubnet, ok := lookupEnv("TRUSTED_SUBNET"); ok {
+		cfg.TrustedSubnet = trustedSubnet
+	}
+
 	if auditFile, ok := lookupEnv("AUDIT_FILE"); ok {
 		cfg.AuditFile = auditFile
 	}
 
 	if auditURL, ok := lookupEnv("AUDIT_URL"); ok {
 		cfg.AuditURL = auditURL
-	}
-
-	if trustedSubnet, ok := lookupEnv("TRUSTED_SUBNET"); ok {
-		cfg.TrustedSubnet = trustedSubnet
 	}
 
 	return nil

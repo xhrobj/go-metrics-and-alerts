@@ -15,9 +15,9 @@ type serverFileConfig struct {
 	DatabaseDSN   *string `json:"database_dsn"`
 	Key           *string `json:"key"`
 	CryptoKey     *string `json:"crypto_key"`
+	TrustedSubnet *string `json:"trusted_subnet"`
 	AuditFile     *string `json:"audit_file"`
 	AuditURL      *string `json:"audit_url"`
-	TrustedSubnet *string `json:"trusted_subnet"`
 }
 
 func loadServerConfigFile(path string, cfg *ServerConfig) error {
@@ -76,16 +76,16 @@ func loadServerConfigFile(path string, cfg *ServerConfig) error {
 		cfg.CryptoKey = *fileCfg.CryptoKey
 	}
 
+	if fileCfg.TrustedSubnet != nil {
+		cfg.TrustedSubnet = *fileCfg.TrustedSubnet
+	}
+
 	if fileCfg.AuditFile != nil {
 		cfg.AuditFile = *fileCfg.AuditFile
 	}
 
 	if fileCfg.AuditURL != nil {
 		cfg.AuditURL = *fileCfg.AuditURL
-	}
-
-	if fileCfg.TrustedSubnet != nil {
-		cfg.TrustedSubnet = *fileCfg.TrustedSubnet
 	}
 
 	return nil

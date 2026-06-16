@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,9 +32,9 @@ func TestParseServerConfig(t *testing.T) {
 				"-d", "postgres://flag",
 				"-k", "flag-key",
 				"--crypto-key", "private.pem",
+				"-t", "192.168.1.0/24",
 				"--audit-file", "audit.log",
 				"--audit-url", "http://audit",
-				"-t", "192.168.1.0/24",
 			},
 			want: ServerConfig{
 				ServerAddr:         "server:8081",
@@ -42,10 +43,10 @@ func TestParseServerConfig(t *testing.T) {
 				Restore:            true,
 				DatabaseDSN:        "postgres://flag",
 				Key:                "flag-key",
-				AuditFile:          "audit.log",
-				AuditURL:           "http://audit",
 				CryptoKey:          "private.pem",
 				TrustedSubnet:      "192.168.1.0/24",
+				AuditFile:          "audit.log",
+				AuditURL:           "http://audit",
 			},
 		},
 		{
@@ -58,9 +59,9 @@ func TestParseServerConfig(t *testing.T) {
 				"-d", "postgres://flag",
 				"-k", "flag-key",
 				"--crypto-key", "flag-private.pem",
+				"-t", "192.168.1.0/24",
 				"--audit-file", "flag-audit.log",
 				"--audit-url", "http://flag-audit",
-				"-t", "192.168.1.0/24",
 			},
 			env: map[string]string{
 				"ADDRESS":           "env-server:8082",
@@ -70,9 +71,9 @@ func TestParseServerConfig(t *testing.T) {
 				"DATABASE_DSN":      "postgres://env",
 				"KEY":               "env-key",
 				"CRYPTO_KEY":        "env-private.pem",
+				"TRUSTED_SUBNET":    "10.0.0.0/8",
 				"AUDIT_FILE":        "env-audit.log",
 				"AUDIT_URL":         "http://env-audit",
-				"TRUSTED_SUBNET":    "10.0.0.0/8",
 			},
 			want: ServerConfig{
 				ServerAddr:         "env-server:8082",
@@ -81,10 +82,10 @@ func TestParseServerConfig(t *testing.T) {
 				Restore:            true,
 				DatabaseDSN:        "postgres://env",
 				Key:                "env-key",
-				AuditFile:          "env-audit.log",
-				AuditURL:           "http://env-audit",
 				CryptoKey:          "env-private.pem",
 				TrustedSubnet:      "10.0.0.0/8",
+				AuditFile:          "env-audit.log",
+				AuditURL:           "http://env-audit",
 			},
 		},
 		{
@@ -118,15 +119,15 @@ func TestParseServerConfig(t *testing.T) {
 func TestParseServerConfigFromFile(t *testing.T) {
 	configPath := writeServerConfigFile(t, `{
 		"address": "json-server:8083",
-		"restore": true,
 		"store_interval": "45s",
 		"store_file": "json-metrics.json",
+		"restore": true,
 		"database_dsn": "postgres://json",
 		"key": "json-key",
 		"crypto_key": "json-private.pem",
+		"trusted_subnet": "172.16.0.0/12",
 		"audit_file": "json-audit.log",
-		"audit_url": "http://json-audit",
-		"trusted_subnet": "172.16.0.0/12"
+		"audit_url": "http://json-audit"
 	}`)
 
 	got, err := parseServerConfig(
@@ -145,10 +146,9 @@ func TestParseServerConfigFromFile(t *testing.T) {
 		DatabaseDSN:        "postgres://json",
 		Key:                "json-key",
 		CryptoKey:          "json-private.pem",
+		TrustedSubnet:      "172.16.0.0/12",
 		AuditFile:          "json-audit.log",
 		AuditURL:           "http://json-audit",
-		TrustedSubnet:      "172.16.0.0/12",
-		ConfigPath:         configPath,
 	}
 
 	if got != want {
@@ -173,7 +173,6 @@ func TestParseServerConfigFileKeepsDefaults(t *testing.T) {
 		ServerAddr:         "json-server:8083",
 		StoreIntervalInSec: 300,
 		FileStoragePath:    "metrics-db.json",
-		ConfigPath:         configPath,
 	}
 
 	if got != want {
@@ -184,20 +183,19 @@ func TestParseServerConfigFileKeepsDefaults(t *testing.T) {
 func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 	configPath := writeServerConfigFile(t, `{
 		"address": "json-server:8083",
-		"restore": true,
 		"store_interval": "45s",
 		"store_file": "json-metrics.json",
+		"restore": true,
 		"database_dsn": "postgres://json",
 		"key": "json-key",
 		"crypto_key": "json-private.pem",
+		"trusted_subnet": "172.16.0.0/12",
 		"audit_file": "json-audit.log",
-		"audit_url": "http://json-audit",
-		"trusted_subnet": "172.16.0.0/12"
+		"audit_url": "http://json-audit"
 	}`)
 
 	got, err := parseServerConfig(
 		[]string{
-			"--config", configPath,
 			"-a", "flag-server:8084",
 			"-i", "60",
 			"-f", "flag-metrics.json",
@@ -205,9 +203,10 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 			"-d", "postgres://flag",
 			"-k", "flag-key",
 			"--crypto-key", "flag-private.pem",
+			"-t", "192.168.1.0/24",
 			"--audit-file", "flag-audit.log",
 			"--audit-url", "http://flag-audit",
-			"-t", "192.168.1.0/24",
+			"--config", configPath,
 		},
 		testLookupEnv(nil),
 	)
@@ -223,10 +222,9 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 		DatabaseDSN:        "postgres://flag",
 		Key:                "flag-key",
 		CryptoKey:          "flag-private.pem",
+		TrustedSubnet:      "192.168.1.0/24",
 		AuditFile:          "flag-audit.log",
 		AuditURL:           "http://flag-audit",
-		TrustedSubnet:      "192.168.1.0/24",
-		ConfigPath:         configPath,
 	}
 
 	if got != want {
@@ -237,20 +235,19 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 	configPath := writeServerConfigFile(t, `{
 		"address": "json-server:8083",
-		"restore": false,
 		"store_interval": "45s",
 		"store_file": "json-metrics.json",
+		"restore": false,
 		"database_dsn": "postgres://json",
 		"key": "json-key",
 		"crypto_key": "json-private.pem",
+		"trusted_subnet": "172.16.0.0/12",
 		"audit_file": "json-audit.log",
-		"audit_url": "http://json-audit",
-		"trusted_subnet": "172.16.0.0/12"
+		"audit_url": "http://json-audit"
 	}`)
 
 	got, err := parseServerConfig(
 		[]string{
-			"--config", configPath,
 			"-a", "flag-server:8084",
 			"-i", "60",
 			"-f", "flag-metrics.json",
@@ -258,9 +255,10 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 			"-d", "postgres://flag",
 			"-k", "flag-key",
 			"--crypto-key", "flag-private.pem",
+			"-t", "192.168.1.0/24",
 			"--audit-file", "flag-audit.log",
 			"--audit-url", "http://flag-audit",
-			"-t", "192.168.1.0/24",
+			"--config", configPath,
 		},
 		testLookupEnv(map[string]string{
 			"ADDRESS":        "env-server:8085",
@@ -270,9 +268,9 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 			"DATABASE_DSN":   "postgres://env",
 			"KEY":            "env-key",
 			"CRYPTO_KEY":     "env-private.pem",
+			"TRUSTED_SUBNET": "10.0.0.0/8",
 			"AUDIT_FILE":     "env-audit.log",
 			"AUDIT_URL":      "http://env-audit",
-			"TRUSTED_SUBNET": "10.0.0.0/8",
 		}),
 	)
 	if err != nil {
@@ -287,10 +285,9 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 		DatabaseDSN:        "postgres://env",
 		Key:                "env-key",
 		CryptoKey:          "env-private.pem",
+		TrustedSubnet:      "10.0.0.0/8",
 		AuditFile:          "env-audit.log",
 		AuditURL:           "http://env-audit",
-		TrustedSubnet:      "10.0.0.0/8",
-		ConfigPath:         configPath,
 	}
 
 	if got != want {
@@ -321,7 +318,6 @@ func TestParseServerConfigEnvironmentOverridesConfigFlag(t *testing.T) {
 		ServerAddr:         "env-file-server:8082",
 		StoreIntervalInSec: 300,
 		FileStoragePath:    "metrics-db.json",
-		ConfigPath:         envConfigPath,
 	}
 
 	if got != want {
@@ -335,6 +331,11 @@ func TestParseServerConfigInvalidEnvironment(t *testing.T) {
 	}))
 	if err == nil {
 		t.Fatal("parseServerConfig() error = nil, want error")
+	}
+
+	wantError := `RESTORE="invalid"`
+	if !strings.Contains(err.Error(), wantError) {
+		t.Fatalf("parseServerConfig() error = %q, want substring %q", err, wantError)
 	}
 }
 

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -109,7 +110,6 @@ func TestParseAgentConfigFromFile(t *testing.T) {
 		RateLimit:           7,
 		Key:                 "json-key",
 		CryptoKey:           "json-public.pem",
-		ConfigPath:          configPath,
 	}
 
 	if got != want {
@@ -135,7 +135,6 @@ func TestParseAgentConfigFileKeepsDefaults(t *testing.T) {
 		PollIntervalInSec:   2,
 		ReportIntervalInSec: 10,
 		RateLimit:           5,
-		ConfigPath:          configPath,
 	}
 
 	if got != want {
@@ -176,7 +175,6 @@ func TestParseAgentConfigFlagsOverrideFile(t *testing.T) {
 		RateLimit:           8,
 		Key:                 "flag-key",
 		CryptoKey:           "flag-public.pem",
-		ConfigPath:          configPath,
 	}
 
 	if got != want {
@@ -224,7 +222,6 @@ func TestParseAgentConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 		RateLimit:           9,
 		Key:                 "env-key",
 		CryptoKey:           "env-public.pem",
-		ConfigPath:          configPath,
 	}
 
 	if got != want {
@@ -256,7 +253,6 @@ func TestParseAgentConfigEnvironmentOverridesConfigFlag(t *testing.T) {
 		PollIntervalInSec:   2,
 		ReportIntervalInSec: 10,
 		RateLimit:           5,
-		ConfigPath:          envConfigPath,
 	}
 
 	if got != want {
@@ -270,6 +266,11 @@ func TestParseAgentConfigInvalidEnvironment(t *testing.T) {
 	}))
 	if err == nil {
 		t.Fatal("parseAgentConfig() error = nil, want error")
+	}
+
+	wantError := `POLL_INTERVAL="invalid"`
+	if !strings.Contains(err.Error(), wantError) {
+		t.Fatalf("parseAgentConfig() error = %q, want substring %q", err, wantError)
 	}
 }
 
