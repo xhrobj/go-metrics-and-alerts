@@ -31,7 +31,10 @@ func New(h *handler.Handler, log *zap.Logger, opts Options) http.Handler {
 		r.Use(appmiddleware.WithHash(opts.HashKey))
 	}
 
-	r.Use(appmiddleware.WithDecryption(opts.PrivateKey))
+	if opts.PrivateKey != nil {
+		r.Use(appmiddleware.WithDecryption(opts.PrivateKey))
+	}
+
 	r.Use(appmiddleware.WithGzip)
 
 	r.Get("/ping", h.Ping)
