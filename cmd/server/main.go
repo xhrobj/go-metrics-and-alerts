@@ -333,13 +333,15 @@ func setupAudit(
 	h *handler.Handler,
 	lg *zap.Logger,
 ) (func(), error) {
-	noop := func() {}
-	cleanup := noop
-
-	if cfg.AuditFile == "" && cfg.AuditURL == "" {
-		return cleanup, nil
+	noop := func() {
+		// Освобождать ресурсы не требуется
 	}
 
+	if cfg.AuditFile == "" && cfg.AuditURL == "" {
+		return noop, nil
+	}
+
+	cleanup := noop
 	auditDispatcher := audit.NewAuditor()
 
 	if cfg.AuditFile != "" {
