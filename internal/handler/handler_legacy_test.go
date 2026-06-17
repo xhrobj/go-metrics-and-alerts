@@ -10,6 +10,7 @@ package handler_test
 // В текущей реализации Агент работает только с JSON API.
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,7 +18,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
+	handlermocks "github.com/xhrobj/go-metrics-and-alerts/internal/handler/mocks"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"go.uber.org/mock/gomock"
 )
 
 // testRouter собирает HTTP-роутер для тестов совместимого path-based API
@@ -36,8 +39,11 @@ func testRouter(t *testing.T, h *handler.Handler) http.Handler {
 
 // 200 OK для валидного POST /update/gauge/<name>/<value>
 func TestHandler_Update_Gauge_OK(t *testing.T) {
-	repo := newMockServerStorage()
-	srv := service.NewMetricsService(repo)
+	srv := newMockService(t)
+	srv.EXPECT().
+		UpdateGauge(gomock.Any(), "Alloc", 5.11).
+		Return(nil)
+
 	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
@@ -51,11 +57,6 @@ func TestHandler_Update_Gauge_OK(t *testing.T) {
 		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
 	}
 
-	expected := 5.11
-	if got := repo.gauges["Alloc"]; got != expected {
-		t.Fatalf("expected %v, got %v", expected, got)
-	}
-
 	ct := rr.Header().Get("Content-Type")
 	if ct != "text/plain; charset=utf-8" {
 		t.Errorf("expected Content-Type %q, got %q", "text/plain; charset=utf-8", ct)
@@ -64,8 +65,11 @@ func TestHandler_Update_Gauge_OK(t *testing.T) {
 
 // 200 OK для валидного POST /update/counter/<name>/<value>
 func TestHandler_Update_Counter_OK(t *testing.T) {
-	repo := newMockServerStorage()
-	srv := service.NewMetricsService(repo)
+	srv := newMockService(t)
+	srv.EXPECT().
+		UpdateCounter(gomock.Any(), "PollCount", int64(42)).
+		Return(int64(42), nil)
+
 	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
@@ -79,11 +83,6 @@ func TestHandler_Update_Counter_OK(t *testing.T) {
 		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
 	}
 
-	expected := int64(42)
-	if got := repo.counters["PollCount"]; got != expected {
-		t.Fatalf("expected %v, got %v", expected, got)
-	}
-
 	ct := rr.Header().Get("Content-Type")
 	if ct != "text/plain; charset=utf-8" {
 		t.Errorf("expected Content-Type %q, got %q", "text/plain; charset=utf-8", ct)
@@ -92,8 +91,17 @@ func TestHandler_Update_Counter_OK(t *testing.T) {
 
 // два POST на одну counter-метрику (для /update/counter/...) -> счётчик суммируется
 func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
-	repo := newMockServerStorage()
-	srv := service.NewMetricsService(repo)
+	srv := newMockService(t)
+
+	var total int64
+	srv.EXPECT().
+		UpdateCounter(gomock.Any(), "PollCount", int64(42)).
+		DoAndReturn(func(_ context.Context, _ string, delta int64) (int64, error) {
+			total += delta
+			return total, nil
+		}).
+		Times(2)
+
 	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
@@ -110,15 +118,14 @@ func TestHandler_Update_Counter_Accumulates_OK(t *testing.T) {
 		t.Fatalf("expected %d, got %d", http.StatusOK, rr2.Code)
 	}
 
-	expected := int64(84)
-	if got := repo.counters["PollCount"]; got != expected {
-		t.Errorf("expected %v, got %v", expected, got)
+	if total != 84 {
+		t.Errorf("expected %v, got %v", int64(84), total)
 	}
 }
 
 // ассорти ошибок для POST /update/... (таблица кейсов)
 func TestHandler_Update_StatusCodes(t *testing.T) {
-	srv := service.NewMetricsService(newMockServerStorage())
+	srv := newMockService(t)
 	h := handler.New(srv, nil)
 	r := testRouter(t, h)
 
@@ -181,7 +188,7 @@ func TestHandler_Value(t *testing.T) {
 	tests := []struct {
 		name       string
 		path       string
-		seed       func(repo *mockServerStorage)
+		setup      func(*handlermocks.MockService)
 		wantStatus int
 		wantBody   string
 		wantCT     string
@@ -189,8 +196,10 @@ func TestHandler_Value(t *testing.T) {
 		{
 			name: "gauge ok",
 			path: "/value/gauge/Alloc",
-			seed: func(repo *mockServerStorage) {
-				repo.gauges["Alloc"] = 5.11
+			setup: func(srv *handlermocks.MockService) {
+				srv.EXPECT().
+					GetGauge(gomock.Any(), "Alloc").
+					Return(5.11, nil)
 			},
 			wantStatus: http.StatusOK,
 			wantBody:   "5.11",
@@ -199,8 +208,10 @@ func TestHandler_Value(t *testing.T) {
 		{
 			name: "counter ok",
 			path: "/value/counter/PollCount",
-			seed: func(repo *mockServerStorage) {
-				repo.counters["PollCount"] = 42
+			setup: func(srv *handlermocks.MockService) {
+				srv.EXPECT().
+					GetCounter(gomock.Any(), "PollCount").
+					Return(int64(42), nil)
 			},
 			wantStatus: http.StatusOK,
 			wantBody:   "42",
@@ -209,23 +220,26 @@ func TestHandler_Value(t *testing.T) {
 		{
 			name:       "unknown type -> 404",
 			path:       "/value/unknown/Alloc",
-			seed:       func(repo *mockServerStorage) {},
+			setup:      func(_ *handlermocks.MockService) {},
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			name:       "metric not found -> 404",
-			path:       "/value/gauge/NoSuchMetric",
-			seed:       func(repo *mockServerStorage) {},
+			name: "metric not found -> 404",
+			path: "/value/gauge/NoSuchMetric",
+			setup: func(srv *handlermocks.MockService) {
+				srv.EXPECT().
+					GetGauge(gomock.Any(), "NoSuchMetric").
+					Return(float64(0), repository.ErrMetricNotFound)
+			},
 			wantStatus: http.StatusNotFound,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := newMockServerStorage()
-			tt.seed(repo)
+			srv := newMockService(t)
+			tt.setup(srv)
 
-			srv := service.NewMetricsService(repo)
 			h := handler.New(srv, nil)
 			r := testRouter(t, h)
 

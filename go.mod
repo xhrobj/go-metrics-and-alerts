@@ -12,6 +12,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.26.2
 	github.com/stretchr/testify v1.11.1
 	github.com/timakin/bodyclose v0.0.0-20260129054331-73d1f95b84b4
+	go.uber.org/mock v0.6.0
 	go.uber.org/zap v1.27.1
 	golang.org/x/tools v0.45.0
 	honnef.co/go/tools v0.7.0

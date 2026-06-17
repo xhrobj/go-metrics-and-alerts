@@ -1,6 +1,6 @@
 .PHONY: \
 	show-coverage \
-	generate-reset \
+	generate-reset generate-mocks \
 	crypto-keys \
 	build build-server build-agent \
 	clean-generated clean \
@@ -63,6 +63,10 @@ show-coverage: test-coverage
 # запустить генератор reset.gen.go (см. С7И21)
 generate-reset:
 	go run ./cmd/reset
+
+# сгенерировать моки пакета handler
+generate-mocks:
+	go generate ./internal/handler
 
 # создать (при необходимости) локальную RSA-пару
 crypto-keys:

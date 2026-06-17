@@ -10,13 +10,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
+	handlermocks "github.com/xhrobj/go-metrics-and-alerts/internal/handler/mocks"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"go.uber.org/mock/gomock"
 )
 
 // ValueJSON проверяет метод, Content-Type и корректность JSON-запроса.
 func TestHandler_ValueJSON_RequestValidation(t *testing.T) {
-	srv := service.NewMetricsService(newMockServerStorage())
+	srv := newMockService(t)
 	h := handler.New(srv, nil)
 
 	tests := []struct {
@@ -75,7 +77,7 @@ func TestHandler_ValueJSON(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       string
-		seed       func(repo *mockServerStorage)
+		setup      func(*handlermocks.MockService)
 		wantStatus int
 		wantCT     string
 		wantValue  float64
@@ -87,8 +89,10 @@ func TestHandler_ValueJSON(t *testing.T) {
 				"id": "Alloc",
 				"type": "gauge"
 			}`,
-			seed: func(repo *mockServerStorage) {
-				repo.gauges["Alloc"] = 5.11
+			setup: func(srv *handlermocks.MockService) {
+				srv.EXPECT().
+					GetGauge(gomock.Any(), "Alloc").
+					Return(5.11, nil)
 			},
 			wantStatus: http.StatusOK,
 			wantCT:     "application/json",
@@ -101,8 +105,10 @@ func TestHandler_ValueJSON(t *testing.T) {
 				"id": "PollCount",
 				"type": "counter"
 			}`,
-			seed: func(repo *mockServerStorage) {
-				repo.counters["PollCount"] = 42
+			setup: func(srv *handlermocks.MockService) {
+				srv.EXPECT().
+					GetCounter(gomock.Any(), "PollCount").
+					Return(int64(42), nil)
 			},
 			wantStatus: http.StatusOK,
 			wantCT:     "application/json",
@@ -115,7 +121,7 @@ func TestHandler_ValueJSON(t *testing.T) {
 				"id": "Alloc",
 				"type": "unknown"
 			}`,
-			seed:       func(repo *mockServerStorage) {},
+			setup:      func(_ *handlermocks.MockService) {},
 			wantStatus: http.StatusNotFound,
 			wantValue:  0,
 			wantDelta:  0,
@@ -126,7 +132,11 @@ func TestHandler_ValueJSON(t *testing.T) {
 				"id": "NoSuchMetric",
 				"type": "gauge"
 			}`,
-			seed:       func(repo *mockServerStorage) {},
+			setup: func(srv *handlermocks.MockService) {
+				srv.EXPECT().
+					GetGauge(gomock.Any(), "NoSuchMetric").
+					Return(float64(0), repository.ErrMetricNotFound)
+			},
 			wantStatus: http.StatusNotFound,
 			wantValue:  0,
 			wantDelta:  0,
@@ -135,10 +145,9 @@ func TestHandler_ValueJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := newMockServerStorage()
-			tt.seed(repo)
+			srv := newMockService(t)
+			tt.setup(srv)
 
-			srv := service.NewMetricsService(repo)
 			h := handler.New(srv, nil)
 
 			rq := httptest.NewRequest(http.MethodPost, "/value", strings.NewReader(tt.body))
@@ -172,11 +181,15 @@ func TestHandler_ValueJSON(t *testing.T) {
 
 // Index возвращает HTML-страницу со списком метрик, хранящихся в репозитории
 func TestHandler_Index_HTML_OK(t *testing.T) {
-	repo := newMockServerStorage()
-	repo.gauges["Alloc"] = 5.11
-	repo.counters["PollCount"] = 42
+	srv := newMockService(t)
+	srv.EXPECT().
+		Snapshot(gomock.Any()).
+		Return(
+			map[string]float64{"Alloc": 5.11},
+			map[string]int64{"PollCount": 42},
+			nil,
+		)
 
-	srv := service.NewMetricsService(repo)
 	h := handler.New(srv, nil)
 
 	rq := httptest.NewRequest(http.MethodGet, "/", nil)

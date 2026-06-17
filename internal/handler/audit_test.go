@@ -13,7 +13,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 )
 
@@ -32,8 +32,11 @@ func (m *mockAuditor) Notify(
 }
 
 func TestHandler_UpdateJSON_NotifiesAuditor(t *testing.T) {
-	repo := newMockServerStorage()
-	srv := service.NewMetricsService(repo)
+	srv := newMockService(t)
+	srv.EXPECT().
+		UpdateGauge(gomock.Any(), "Alloc", 5.11).
+		Return(nil)
+
 	h := handler.New(srv, nil)
 
 	auditor := &mockAuditor{
@@ -70,13 +73,6 @@ func TestHandler_UpdateJSON_NotifiesAuditor(t *testing.T) {
 }
 
 func TestHandler_UpdatesJSON_NotifiesAuditor(t *testing.T) {
-	repo := newMockServerStorage()
-	srv := service.NewMetricsService(repo)
-	h := handler.New(srv, nil)
-
-	auditor := &mockAuditor{}
-	h.EnableAudit(auditor, zap.NewNop())
-
 	value := 5.11
 	delta := int64(42)
 
@@ -92,6 +88,16 @@ func TestHandler_UpdatesJSON_NotifiesAuditor(t *testing.T) {
 			Delta: &delta,
 		},
 	}
+
+	srv := newMockService(t)
+	srv.EXPECT().
+		UpdateMetrics(gomock.Any(), gomock.Eq(metrics)).
+		Return(nil)
+
+	h := handler.New(srv, nil)
+
+	auditor := &mockAuditor{}
+	h.EnableAudit(auditor, zap.NewNop())
 
 	body, err := json.Marshal(metrics)
 	require.NoError(t, err)
