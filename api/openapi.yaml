@@ -1,0 +1,597 @@
+openapi: 3.0.3
+
+info:
+  title: Metrics and Alerts HTTP API
+  description: |
+    HTTP API Сервера сбора метрик и алертинга.
+
+    Сервер хранит метрики двух типов:
+
+    - `gauge` — вещественное значение, новое значение заменяет предыдущее;
+    - `counter` — целочисленное значение, новое значение прибавляется к накопленному.
+
+    JSON API является основным интерфейсом. Path-based маршруты сохранены
+    для совместимости с ранними инкрементами проекта.
+
+    В зависимости от конфигурации Сервер также поддерживает:
+
+    - проверку подписи тела через заголовок `HashSHA256`;
+    - gzip-сжатие запросов и ответов;
+    - гибридное шифрование тела запроса через `Content-Encryption: rsa-aes-gcm`;
+    - ограничение маршрутов записи доверенной подсетью по заголовку `X-Real-IP`.
+  version: 1.0.0
+
+servers:
+  - url: http://{host}:{port}
+    description: HTTP Сервер
+    variables:
+      host:
+        default: localhost
+        description: Имя хоста или IP-адрес Сервера
+      port:
+        default: '8080'
+        description: Порт HTTP Сервера
+
+security: []
+
+tags:
+  - name: Metrics
+    description: Запись и чтение метрик
+  - name: Legacy
+    description: Path-based API для совместимости с ранними инкрементами
+  - name: Service
+    description: Служебные и пользовательские маршруты
+
+paths:
+  /:
+    get:
+      tags:
+        - Service
+      summary: Получить список метрик
+      description: Возвращает HTML-страницу со всеми известными метриками и их текущими значениями.
+      operationId: getMetricsPage
+      parameters:
+        - $ref: '#/components/parameters/HashSHA256'
+        - $ref: '#/components/parameters/AcceptEncoding'
+      responses:
+        '200':
+          description: HTML-страница со списком метрик
+          headers:
+            HashSHA256:
+              $ref: '#/components/headers/HashSHA256'
+            Content-Encoding:
+              $ref: '#/components/headers/ContentEncoding'
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <html><body><h1>storage values</h1><ul><li>Alloc: 5.11</li><li>PollCount: 42</li></ul></body></html>
+        '400':
+          description: Некорректная подпись запроса
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /ping:
+    get:
+      tags:
+        - Service
+      summary: Проверить соединение с PostgreSQL
+      description: Возвращает `200 OK`, если соединение с базой данных настроено и доступно.
+      operationId: pingDatabase
+      parameters:
+        - $ref: '#/components/parameters/HashSHA256'
+      responses:
+        '200':
+          description: Соединение с PostgreSQL доступно
+          headers:
+            HashSHA256:
+              $ref: '#/components/headers/HashSHA256'
+        '400':
+          description: Некорректная подпись запроса
+        '500':
+          description: База данных не настроена или недоступна
+          headers:
+            HashSHA256:
+              $ref: '#/components/headers/HashSHA256'
+
+  /update/{type}/{name}/{value}:
+    post:
+      tags:
+        - Legacy
+      summary: Обновить метрику через параметры пути
+      description: |
+        Legacy-маршрут. Для новых интеграций следует использовать `POST /update`.
+
+        Для `gauge` значение разбирается как `float64`, для `counter` — как `int64`.
+        Заголовок `Content-Type` может отсутствовать; если он передан, ожидается `text/plain`.
+      operationId: updateMetricByPath
+      parameters:
+        - $ref: '#/components/parameters/MetricTypePath'
+        - $ref: '#/components/parameters/MetricNamePath'
+        - $ref: '#/components/parameters/MetricValuePath'
+        - $ref: '#/components/parameters/RealIP'
+      responses:
+        '200':
+          description: Метрика обновлена
+          headers:
+            HashSHA256:
+              $ref: '#/components/headers/HashSHA256'
+        '400':
+          description: Некорректный тип, значение или Content-Type
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Имя метрики отсутствует или путь не соответствует маршруту
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /update:
+    post:
+      tags:
+        - Metrics
+      summary: Обновить одну метрику
+      description: |
+        Сохраняет новое значение метрики и возвращает её итоговое значение.
+
+        Для `gauge` новое значение заменяет предыдущее. Для `counter` переданная
+        дельта прибавляется к накопленному значению, а в ответе возвращается новый итог.
+      operationId: updateMetric
+      parameters:
+        - $ref: '#/components/parameters/RealIP'
+        - $ref: '#/components/parameters/HashSHA256'
+        - $ref: '#/components/parameters/ContentEncoding'
+        - $ref: '#/components/parameters/ContentEncryption'
+        - $ref: '#/components/parameters/AcceptEncoding'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetricUpdate'
+            examples:
+              gauge:
+                summary: Обновление gauge-метрики
+                value:
+                  id: Alloc
+                  type: gauge
+                  value: 5.11
+              counter:
+                summary: Обновление counter-метрики
+                value:
+                  id: PollCount
+                  type: counter
+                  delta: 42
+      responses:
+        '200':
+          description: Метрика обновлена; возвращено итоговое значение
+          headers:
+            HashSHA256:
+              $ref: '#/components/headers/HashSHA256'
+            Content-Encoding:
+              $ref: '#/components/headers/ContentEncoding'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricValue'
+              examples:
+                gauge:
+                  value:
+                    id: Alloc
+                    type: gauge
+                    value: 5.11
+                counter:
+                  value:
+                    id: PollCount
+                    type: counter
+                    delta: 42
+        '400':
+          description: Некорректный Content-Type, JSON, тип метрики, значение, подпись или шифрование
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Имя метрики отсутствует
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /updates:
+    post:
+      tags:
+        - Metrics
+      summary: Обновить набор метрик
+      description: |
+        Атомарно обновляет набор метрик. Перед применением Сервер валидирует весь batch;
+        если хотя бы одна метрика некорректна, ни одна метрика не применяется.
+      operationId: updateMetricsBatch
+      parameters:
+        - $ref: '#/components/parameters/RealIP'
+        - $ref: '#/components/parameters/HashSHA256'
+        - $ref: '#/components/parameters/ContentEncoding'
+        - $ref: '#/components/parameters/ContentEncryption'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/MetricUpdate'
+            example:
+              - id: Alloc
+                type: gauge
+                value: 5.11
+              - id: PollCount
+                type: counter
+                delta: 42
+      responses:
+        '200':
+          description: Набор метрик обновлён
+          headers:
+            HashSHA256:
+              $ref: '#/components/headers/HashSHA256'
+        '400':
+          description: Некорректный Content-Type, JSON, метрика, подпись или шифрование
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: В наборе присутствует метрика без имени
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /value/{type}/{name}:
+    get:
+      tags:
+        - Legacy
+      summary: Получить значение метрики в текстовом виде
+      description: Legacy-маршрут. Для новых интеграций следует использовать `POST /value`.
+      operationId: getMetricByPath
+      parameters:
+        - $ref: '#/components/parameters/MetricTypePath'
+        - $ref: '#/components/parameters/MetricNamePath'
+      responses:
+        '200':
+          description: Текущее значение метрики
+          headers:
+            HashSHA256:
+              $ref: '#/components/headers/HashSHA256'
+          content:
+            text/plain:
+              schema:
+                type: string
+              examples:
+                gauge:
+                  value: '5.11'
+                counter:
+                  value: '42'
+        '404':
+          description: Тип некорректен, имя отсутствует или метрика не найдена
+
+  /value:
+    post:
+      tags:
+        - Metrics
+      summary: Получить значение одной метрики
+      operationId: getMetric
+      parameters:
+        - $ref: '#/components/parameters/HashSHA256'
+        - $ref: '#/components/parameters/ContentEncoding'
+        - $ref: '#/components/parameters/ContentEncryption'
+        - $ref: '#/components/parameters/AcceptEncoding'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetricLookup'
+            examples:
+              gauge:
+                value:
+                  id: Alloc
+                  type: gauge
+              counter:
+                value:
+                  id: PollCount
+                  type: counter
+      responses:
+        '200':
+          description: Метрика найдена
+          headers:
+            HashSHA256:
+              $ref: '#/components/headers/HashSHA256'
+            Content-Encoding:
+              $ref: '#/components/headers/ContentEncoding'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricValue'
+              examples:
+                gauge:
+                  value:
+                    id: Alloc
+                    type: gauge
+                    value: 5.11
+                counter:
+                  value:
+                    id: PollCount
+                    type: counter
+                    delta: 42
+        '400':
+          description: Некорректный Content-Type, JSON, подпись или шифрование
+        '404':
+          description: Имя отсутствует, тип неизвестен или метрика не найдена
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+components:
+  parameters:
+    MetricTypePath:
+      name: type
+      in: path
+      required: true
+      description: Тип метрики
+      schema:
+        $ref: '#/components/schemas/MetricType'
+
+    MetricNamePath:
+      name: name
+      in: path
+      required: true
+      description: Имя метрики
+      schema:
+        type: string
+        minLength: 1
+      example: Alloc
+
+    MetricValuePath:
+      name: value
+      in: path
+      required: true
+      description: Значение `float64` для gauge или `int64` для counter
+      schema:
+        type: string
+      example: '5.11'
+
+    RealIP:
+      name: X-Real-IP
+      in: header
+      required: false
+      description: |
+        IP-адрес Агента. Обязателен для маршрутов записи только тогда,
+        когда Сервер запущен с настроенной доверенной подсетью.
+      schema:
+        type: string
+        format: ipv4
+      example: 192.168.1.10
+
+    HashSHA256:
+      name: HashSHA256
+      in: header
+      required: false
+      description: |
+        HMAC-подобная SHA-256 подпись тела запроса, рассчитанная с общим ключом.
+        Проверяется только при настроенном ключе и наличии заголовка.
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{64}$'
+
+    ContentEncoding:
+      name: Content-Encoding
+      in: header
+      required: false
+      description: Указывает, что тело запроса сжато gzip.
+      schema:
+        type: string
+        enum:
+          - gzip
+
+    AcceptEncoding:
+      name: Accept-Encoding
+      in: header
+      required: false
+      description: Запрашивает gzip-сжатие JSON- или HTML-ответа.
+      schema:
+        type: string
+      example: gzip
+
+    ContentEncryption:
+      name: Content-Encryption
+      in: header
+      required: false
+      description: |
+        Указывает, что тело запроса зашифровано по гибридной схеме:
+        данные — AES-GCM, одноразовый AES-ключ — RSA-OAEP.
+      schema:
+        type: string
+        enum:
+          - rsa-aes-gcm
+
+  headers:
+    HashSHA256:
+      description: SHA-256 подпись тела ответа; добавляется при настроенном общем ключе.
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{64}$'
+
+    ContentEncoding:
+      description: Присутствует со значением `gzip`, если ответ был сжат.
+      schema:
+        type: string
+        enum:
+          - gzip
+
+  responses:
+    Forbidden:
+      description: IP-адрес из `X-Real-IP` отсутствует, некорректен или не входит в доверенную подсеть
+
+    MethodNotAllowed:
+      description: HTTP-метод не поддерживается маршрутом
+
+    InternalServerError:
+      description: Внутренняя ошибка Сервера
+
+  schemas:
+    MetricType:
+      type: string
+      description: Тип метрики
+      enum:
+        - gauge
+        - counter
+
+    MetricUpdate:
+      description: Метрика с обязательным значением соответствующего типа
+      oneOf:
+        - $ref: '#/components/schemas/GaugeMetricUpdate'
+        - $ref: '#/components/schemas/CounterMetricUpdate'
+      discriminator:
+        propertyName: type
+        mapping:
+          gauge: '#/components/schemas/GaugeMetricUpdate'
+          counter: '#/components/schemas/CounterMetricUpdate'
+
+    GaugeMetricUpdate:
+      type: object
+      required:
+        - id
+        - type
+        - value
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Имя метрики
+          example: Alloc
+        type:
+          type: string
+          enum:
+            - gauge
+        value:
+          type: number
+          format: double
+          example: 5.11
+        hash:
+          type: string
+          description: Опциональная подпись метрики из транспортной модели
+
+    CounterMetricUpdate:
+      type: object
+      required:
+        - id
+        - type
+        - delta
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Имя метрики
+          example: PollCount
+        type:
+          type: string
+          enum:
+            - counter
+        delta:
+          type: integer
+          format: int64
+          example: 42
+        hash:
+          type: string
+          description: Опциональная подпись метрики из транспортной модели
+
+    MetricLookup:
+      description: Идентификатор и тип запрашиваемой метрики
+      oneOf:
+        - $ref: '#/components/schemas/GaugeMetricLookup'
+        - $ref: '#/components/schemas/CounterMetricLookup'
+      discriminator:
+        propertyName: type
+        mapping:
+          gauge: '#/components/schemas/GaugeMetricLookup'
+          counter: '#/components/schemas/CounterMetricLookup'
+
+    GaugeMetricLookup:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+          minLength: 1
+          example: Alloc
+        type:
+          type: string
+          enum:
+            - gauge
+        hash:
+          type: string
+
+    CounterMetricLookup:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+          minLength: 1
+          example: PollCount
+        type:
+          type: string
+          enum:
+            - counter
+        hash:
+          type: string
+
+    MetricValue:
+      description: Метрика с текущим значением
+      oneOf:
+        - $ref: '#/components/schemas/GaugeMetricValue'
+        - $ref: '#/components/schemas/CounterMetricValue'
+      discriminator:
+        propertyName: type
+        mapping:
+          gauge: '#/components/schemas/GaugeMetricValue'
+          counter: '#/components/schemas/CounterMetricValue'
+
+    GaugeMetricValue:
+      type: object
+      required:
+        - id
+        - type
+        - value
+      properties:
+        id:
+          type: string
+          example: Alloc
+        type:
+          type: string
+          enum:
+            - gauge
+        value:
+          type: number
+          format: double
+          example: 5.11
+
+    CounterMetricValue:
+      type: object
+      required:
+        - id
+        - type
+        - delta
+      properties:
+        id:
+          type: string
+          example: PollCount
+        type:
+          type: string
+          enum:
+            - counter
+        delta:
+          type: integer
+          format: int64
+          example: 42
