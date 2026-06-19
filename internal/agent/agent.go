@@ -2,22 +2,26 @@ package agent
 
 import (
 	"context"
+	"crypto/rsa"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/shirou/gopsutil/v4/cpu"
-	agentConfig "github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"go.uber.org/zap"
 )
 
+const shutdownTimeout = time.Second * 30
+
 // AgentStorage описывает хранилище метрик, используемое Агентом.
 type AgentStorage interface {
 	UpdateGauge(context.Context, string, float64) error
-	UpdateCounter(context.Context, string, int64) error
 	Snapshot(context.Context) (map[string]float64, map[string]int64, error)
 }
 
@@ -26,7 +30,7 @@ type reportTask struct {
 	pollCount int64
 }
 
-// Agent собирает runtime- и системные метрики и отправляет их на Сервер по HTTP.
+// Agent собирает системные и runtime-метрики и отправляет их на Сервер по HTTP.
 type Agent struct {
 	repo                AgentStorage
 	baseURL             string
@@ -34,6 +38,7 @@ type Agent struct {
 	reportIntervalInSec int
 	rateLimit           int
 	hashKey             string
+	publicKey           *rsa.PublicKey
 	client              *resty.Client
 	log                 *zap.Logger
 
@@ -48,7 +53,7 @@ type Agent struct {
 }
 
 // New создаёт нового Агента с указанными параметрами конфигурации.
-func New(repo AgentStorage, cfg agentConfig.Config, log *zap.Logger) (*Agent, error) {
+func New(repo AgentStorage, cfg config.AgentConfig, log *zap.Logger) (*Agent, error) {
 	if log == nil {
 		log = zap.NewNop()
 	}
@@ -61,6 +66,16 @@ func New(repo AgentStorage, cfg agentConfig.Config, log *zap.Logger) (*Agent, er
 	}
 	if cfg.RateLimit <= 0 {
 		return nil, fmt.Errorf("rate limit must be > 0, got %d", cfg.RateLimit)
+	}
+
+	var publicKey *rsa.PublicKey
+	if cfg.CryptoKey != "" {
+		loadedPublicKey, err := encryption.LoadPublicKey(cfg.CryptoKey)
+		if err != nil {
+			return nil, fmt.Errorf("load public key: %w", err)
+		}
+
+		publicKey = loadedPublicKey
 	}
 
 	baseURL := cfg.ServerAddr
@@ -77,6 +92,7 @@ func New(repo AgentStorage, cfg agentConfig.Config, log *zap.Logger) (*Agent, er
 		reportIntervalInSec: cfg.ReportIntervalInSec,
 		rateLimit:           cfg.RateLimit,
 		hashKey:             cfg.Key,
+		publicKey:           publicKey,
 		client:              resty.New(),
 		log:                 log,
 		sendQueue:           queue,
@@ -86,15 +102,102 @@ func New(repo AgentStorage, cfg agentConfig.Config, log *zap.Logger) (*Agent, er
 
 // Run запускает независимые горутины:
 // сбор runtime-метрик, сбор системных метрик и отправку метрик на Сервер.
-func (a *Agent) Run(ctx context.Context) {
-	go a.runRuntimePollLoop(ctx)
-	go a.runSystemPollLoop(ctx)
+//
+// При отмене контекста ждёт завершения активных операций и
+// отправляет финальный снимок.
+func (a *Agent) Run(ctx context.Context) error {
+	sendCtx, cancelSend := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelSend()
 
+	var pollAndReportWG sync.WaitGroup
+	pollAndReportWG.Add(3)
+
+	go func() {
+		defer pollAndReportWG.Done()
+		a.runRuntimePollLoop(ctx)
+	}()
+
+	go func() {
+		defer pollAndReportWG.Done()
+		a.runSystemPollLoop(ctx)
+	}()
+
+	go func() {
+		defer pollAndReportWG.Done()
+		a.runReportLoop(ctx)
+	}()
+
+	var sendWG sync.WaitGroup
 	for i := 0; i < a.rateLimit; i++ {
-		go a.runSendWorker(ctx)
+		sendWG.Add(1)
+
+		go func() {
+			defer sendWG.Done()
+			a.runSendWorker(sendCtx)
+		}()
 	}
 
-	a.runReportLoop(ctx)
+	<-ctx.Done()
+	a.log.Info("shutdown signal received")
+
+	shutdownCtx, cancelShutdown := context.WithTimeout(
+		context.WithoutCancel(ctx),
+		shutdownTimeout,
+	)
+	defer cancelShutdown()
+
+	if err := waitForGroup(shutdownCtx, &pollAndReportWG); err != nil {
+		cancelSend()
+		return fmt.Errorf("wait poll and report loops: %w", err)
+	}
+
+	close(a.sendQueue)
+
+	if err := waitForGroup(shutdownCtx, &sendWG); err != nil {
+		cancelSend()
+		return fmt.Errorf("wait send workers: %w", err)
+	}
+
+	if err := a.flush(shutdownCtx); err != nil {
+		return err
+	}
+
+	a.log.Info("agent stopped")
+
+	return nil
+}
+
+func waitForGroup(ctx context.Context, wg *sync.WaitGroup) error {
+	done := make(chan struct{})
+
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (a *Agent) flush(ctx context.Context) error {
+	pollCount := a.pollSinceReport.Swap(0)
+
+	metrics, err := a.buildMetricsBatch(ctx, pollCount)
+	if err != nil {
+		a.pollSinceReport.Add(pollCount)
+		return fmt.Errorf("build final metrics batch: %w", err)
+	}
+
+	if err := a.sendMetrics(ctx, metrics); err != nil {
+		a.pollSinceReport.Add(pollCount)
+		return fmt.Errorf("send final metrics batch: %w", err)
+	}
+
+	return nil
 }
 
 func (a *Agent) runRuntimePollLoop(ctx context.Context) {
@@ -110,6 +213,7 @@ func (a *Agent) runRuntimePollLoop(ctx context.Context) {
 		}
 	}
 }
+
 func (a *Agent) runSystemPollLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
 	defer ticker.Stop()

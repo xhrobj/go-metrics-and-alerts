@@ -1,6 +1,7 @@
 package router
 
 import (
+	"crypto/rsa"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -10,16 +11,30 @@ import (
 	"go.uber.org/zap"
 )
 
+// Options содержит настройки HTTP-роутера.
+type Options struct {
+	HashKey    string
+	PrivateKey *rsa.PrivateKey
+}
+
 // New создаёт и настраивает HTTP-роутер:
 // регистрирует маршруты и подключает middleware.
-func New(h *handler.Handler, log *zap.Logger, hashKey string) http.Handler {
+func New(h *handler.Handler, log *zap.Logger, opts Options) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.StripSlashes)
 	r.Use(appmiddleware.WithLogging(log))
-	if hashKey != "" {
-		r.Use(appmiddleware.WithHash(hashKey))
+
+	// входящий body: hash -> decryption -> gzip -> handler
+
+	if opts.HashKey != "" {
+		r.Use(appmiddleware.WithHash(opts.HashKey))
 	}
+
+	if opts.PrivateKey != nil {
+		r.Use(appmiddleware.WithDecryption(opts.PrivateKey))
+	}
+
 	r.Use(appmiddleware.WithGzip)
 
 	r.Get("/ping", h.Ping)

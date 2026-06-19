@@ -2,6 +2,7 @@
 
 [![(-_-) Go CI](https://github.com/xhrobj/go-metrics-and-alerts/actions/workflows/go-ci.yml/badge.svg)](https://github.com/xhrobj/go-metrics-and-alerts/actions/workflows/go-ci.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_go-metrics-and-alerts&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_go-metrics-and-alerts)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_go-metrics-and-alerts&metric=coverage)](https://sonarcloud.io/summary/new_code?id=xhrobj_go-metrics-and-alerts)
 
 ## Спринт 1
 
@@ -863,7 +864,7 @@ http://localhost:8080/github.com/xhrobj/go-metrics-and-alerts/internal/router#pk
 
 **Результаты**
 
-Добавлена утилита `cmd/staticlint`, которая запускает собственный `multichecker` проекта. Аанализатор `noosexit` запрещает прямой вызов `os.Exit` внутри функции `main` пакета `main`.
+Добавлена утилита `cmd/staticlint`, которая запускает собственный `multichecker` проекта. Анализатор `noosexit` запрещает прямой вызов `os.Exit` внутри функции `main` пакета `main`.
 
 Для запуска `staticlint` добавлена команда:
 
@@ -978,7 +979,7 @@ make clean-generated
 
 ### Инкремент 23
 
-Добавьте в пакеты `cmd/server` и `cmd/agent` (для трека «Сервис сбора метрик и алертинга») глобальные переменные:
+Добавьте в пакеты `cmd/server` и `cmd/agent` глобальные переменные:
 
 - `var buildVersion string`,
 - `var buildDate string`,
@@ -1006,6 +1007,112 @@ Build commit: <buildCommit> (или "N/A" при отсутствии значе
 
 <a href="docs/images/sprint7-evo.png">
   <img src="docs/images/previews/sprint7-evo.png" alt="Спринт 7 - эволюция сервиса">
+</a>
+
+---
+
+## Спринт 8
+
+### Инкремент 24
+
+Добавьте в агент и сервер поддержку асимметричного шифрования.
+
+- Для агента: с помощью флага `-crypto-key` или переменной окружения `CRYPTO_KEY` передайте путь до файла с публичным ключом.
+- Для сервера: с помощью флага `-crypto-key` или переменной окружения `CRYPTO_KEY` передайте путь до файла с приватным ключом.
+
+Шифруйте сообщения от агента к серверу с помощью ключей.
+
+**Задачи**
+
+- #69. Добавить в конфигурацию Агента и Сервера параметр CryptoKey
+- #70. Добавить пакет для шифрования
+- #71. Встроить шифрование в Агент и дешифрование в Сервер
+
+---
+
+### Инкремент 25
+
+Добавьте возможность конфигурации сервера и агента с помощью файла в формате `JSON`. Нужно поддержать все действующие опции приложения. Имя файла конфигурации должно задаваться через флаг `-c`/`-config` или переменную окружения `CONFIG`. Значения из файла конфигурации должны иметь меньший приоритет, чем флаги или переменные окружения.
+
+Формат файла для сервера:
+
+```json
+{
+    "address": "localhost:8080", // аналог переменной окружения ADDRESS или флага -a
+    "restore": true, // аналог переменной окружения RESTORE или флага -r
+    "store_interval": "1s", // аналог переменной окружения STORE_INTERVAL или флага -i
+    "store_file": "/path/to/file.db", // аналог переменной окружения STORE_FILE или -f
+    "database_dsn": "", // аналог переменной окружения DATABASE_DSN или флага -d
+    "crypto_key": "/path/to/key.pem" // аналог переменной окружения CRYPTO_KEY или флага -crypto-key
+} 
+```
+
+Формат файла для агента:
+
+```json
+{
+    "address": "localhost:8080", // аналог переменной окружения ADDRESS или флага -a
+    "report_interval": "1s", // аналог переменной окружения REPORT_INTERVAL или флага -r
+    "poll_interval": "1s", // аналог переменной окружения POLL_INTERVAL или флага -p
+    "crypto_key": "/path/to/key.pem" // аналог переменной окружения CRYPTO_KEY или флага -crypto-key
+} 
+```
+
+**Задачи**
+
+- #72. Добавить в конфигурацию Агента и Сервера параметр CONFIG
+- #73. Добавить загрузку конфигурации Сервера из JSON-файла
+- #74. Добавить загрузку конфигурации Агента из JSON-файла
+
+**Заметки**
+
+- В описании задания есть несоответствие. В инкременте 9 для флага `-f`, задающего путь к файлу хранения текущих значений метрик, была введена переменная окружения `FILE_STORAGE_PATH`. В описании инкремента 25, в примере json-файла конфигурации, для того же параметра указана переменная окружения `STORE_FILE`. Будем поддерживать обе переменные, при этом новая переменная `STORE_FILE` будет иметь более высокий приоритет. В JSON-файле для этого параметра будем поддерживать поле `store_file`.
+
+---
+
+### Инкремент 26
+
+Агент и сервер должны штатно завершаться по сигналам: `syscall.SIGTERM`, `syscall.SIGINT`, `syscall.SIGQUIT`.
+
+Данные, которые находятся в процессе обработки на момент получения сигнала, должны быть успешно переданы агентом на сервер, а сервер должен успешно сохранить все несохранённые данные.
+
+**Задачи**
+
+- #75. Добавить graceful shutdown для Агента
+- #76. Добавить graceful shutdown для Сервера
+
+**Результаты**
+
+Реализация проверена запуском Агента и Сервера через Docker Compose с последующим завершением контейнеров командой `docker compose down`.
+
+Фрагмент лога подтверждает последовательность graceful shutdown: после получения сигнала Агент выполнил финальную отправку метрик, дождался успешного ответа Сервера и завершился с кодом 0. После этого Сервер также завершился штатно.
+
+Сигнал Агенту -> финальный `POST /updates` со статусом `200` -> штатное завершение Агента -> штатное завершение Сервера:
+
+```text
+...
+
+agent-1     | {"level":"info","ts":1781506587.7904048,"caller":"agent/agent.go:138","msg":"shutdown signal received"}
+server-1    | {"level":"info","ts":1781506587.799356,"caller":"middleware/logging.go:68","msg":"http request completed","uri":"/updates","method":"POST","duration":0.00625025,"status":200,"size":0}
+agent-1     | {"level":"info","ts":1781506587.8001022,"caller":"agent/agent.go:170","msg":"agent stopped"}
+agent-1 exited with code 0
+server-1    | {"level":"info","ts":1781506587.9483736,"caller":"server/main.go:166","msg":"shutdown signal received"}
+server-1    | {"level":"info","ts":1781506587.9486651,"caller":"server/main.go:139","msg":"server stopped"}
+server-1 exited with code 0
+
+...
+```
+
+---
+
+### Итоги спринта 8
+
+<a href="docs/images/sprint8-path.png">
+  <img src="docs/images/previews/sprint8-path.png" alt="Спринт 8 - карта инкрементов">
+</a>
+
+<a href="docs/images/sprint8-evo.png">
+  <img src="docs/images/previews/sprint8-evo.png" alt="Спринт 8 - эволюция сервиса">
 </a>
 
 ---

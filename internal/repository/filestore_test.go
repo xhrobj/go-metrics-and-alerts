@@ -12,6 +12,10 @@ import (
 
 type snapshotterFunc func(context.Context) (map[string]float64, map[string]int64, error)
 
+func (f snapshotterFunc) Snapshot(ctx context.Context) (map[string]float64, map[string]int64, error) {
+	return f(ctx)
+}
+
 func TestFileStore_SaveAndLoad(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "metrics.json")
@@ -22,13 +26,13 @@ func TestFileStore_SaveAndLoad(t *testing.T) {
 		t.Fatalf("UpdateGauge() error = %v", err)
 	}
 
-	if err := source.UpdateCounter(ctx, "PollCount", 42); err != nil {
+	if _, err := source.UpdateCounter(ctx, "PollCount", 42); err != nil {
 		t.Fatalf("UpdateCounter() error = %v", err)
 	}
 
 	store := repository.NewFileStore(path)
 
-	if err := store.Save(source); err != nil {
+	if err := store.Save(ctx, source); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 
@@ -114,15 +118,44 @@ func TestFileStore_SaveSnapshotError(t *testing.T) {
 	wantErr := errors.New("snapshot failed")
 	store := repository.NewFileStore(filepath.Join(t.TempDir(), "metrics.json"))
 
-	err := store.Save(snapshotterFunc(func(context.Context) (map[string]float64, map[string]int64, error) {
-		return nil, nil, wantErr
-	}))
+	err := store.Save(
+		context.Background(),
+		snapshotterFunc(func(context.Context) (map[string]float64, map[string]int64, error) {
+			return nil, nil, wantErr
+		}),
+	)
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Save() error = %v, want %v", err, wantErr)
 	}
 }
 
-func (f snapshotterFunc) Snapshot(ctx context.Context) (map[string]float64, map[string]int64, error) {
-	return f(ctx)
+func TestFileStore_SavePassesContextToSnapshot(t *testing.T) {
+	type contextKey struct{}
+
+	key := contextKey{}
+	ctx := context.WithValue(context.Background(), key, "test-value")
+
+	store := repository.NewFileStore(
+		filepath.Join(t.TempDir(), "metrics.json"),
+	)
+
+	var got string
+
+	err := store.Save(
+		ctx,
+		snapshotterFunc(func(ctx context.Context) (map[string]float64, map[string]int64, error) {
+			got, _ = ctx.Value(key).(string)
+
+			return map[string]float64{}, map[string]int64{}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	want := "test-value"
+	if got != want {
+		t.Fatalf("Snapshot() context value = %q, want %q", got, want)
+	}
 }

@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-metrics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-metricsdb}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      target: server
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-N/A}
+        BUILD_DATE: ${BUILD_DATE:-N/A}
+        BUILD_COMMIT: ${BUILD_COMMIT:-N/A}
+    environment:
+      ADDRESS: ":8080"
+      DATABASE_DSN: "postgres://${POSTGRES_USER:-metrics}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-metricsdb}?sslmode=disable"
+      KEY: ${SECRET_KEY:-god}
+      CRYPTO_KEY: /run/secrets/server_private_key
+    ports:
+      - "8080:8080"
+    secrets:
+      - server_private_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -fsS
+        - http://localhost:8080/ping
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    stop_grace_period: 35s # app shutdownTimeout = 30s
+
+  agent:
+    build:
+      context: .
+      target: agent
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-N/A}
+        BUILD_DATE: ${BUILD_DATE:-N/A}
+        BUILD_COMMIT: ${BUILD_COMMIT:-N/A}
+    environment:
+      ADDRESS: server:8080
+      POLL_INTERVAL: 2
+      REPORT_INTERVAL: 5
+      RATE_LIMIT: ${RATE_LIMIT:-3}
+      KEY: ${SECRET_KEY:-god}
+      CRYPTO_KEY: /run/secrets/agent_public_key
+    secrets:
+      - agent_public_key
+    depends_on:
+      server:
+        condition: service_healthy
+    stop_grace_period: 35s # app shutdownTimeout = 30s
+
+volumes:
+  postgres-data:
+
+secrets:
+  server_private_key:
+    file: ./.keys/private.pem
+  agent_public_key:
+    file: ./.keys/public.pem

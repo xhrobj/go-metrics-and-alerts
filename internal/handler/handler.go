@@ -132,22 +132,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// method must be POST
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	// invalid Content-Type
-	ct := r.Header.Get("Content-Type")
-	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), "application/json") {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	var metric model.Metrics
-	if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+	if !decodeJSONRequest(w, r, &metric) {
 		return
 	}
 
@@ -200,22 +186,8 @@ func (h *Handler) UpdateJSON(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdatesJSON(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// method must be POST
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	// invalid Content-Type
-	ct := r.Header.Get("Content-Type")
-	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), "application/json") {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	var metrics []model.Metrics
-	if err := json.NewDecoder(r.Body).Decode(&metrics); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+	if !decodeJSONRequest(w, r, &metrics) {
 		return
 	}
 
@@ -284,20 +256,8 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ValueJSON(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	ct := r.Header.Get("Content-Type")
-	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), "application/json") {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	var metric model.Metrics
-	if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+	if !decodeJSONRequest(w, r, &metric) {
 		return
 	}
 
@@ -396,9 +356,31 @@ func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) bool {
+	// method must be POST
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return false
+	}
+
+	// invalid Content-Type
+	ct := r.Header.Get("Content-Type")
+	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), "application/json") {
+		w.WriteHeader(http.StatusBadRequest)
+		return false
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return false
+	}
+
+	return true
+}
+
 func validateMetric(metric model.Metrics) int {
 	// missing name -> 404
-	// NOTE: Требование из Инкремента 1:
+	// NOTE: Требование из С1И1:
 	// "При попытке передать запрос без имени метрики возвращать http.StatusNotFound"
 	if metric.ID == "" {
 		return http.StatusNotFound

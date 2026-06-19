@@ -13,7 +13,7 @@ import (
 // используемого сервисом.
 type MetricsStorage interface {
 	UpdateGauge(context.Context, string, float64) error
-	UpdateCounter(context.Context, string, int64) error
+	UpdateCounter(context.Context, string, int64) (int64, error)
 
 	UpdateMetrics(context.Context, []model.Metrics) error
 
@@ -26,7 +26,7 @@ type MetricsStorage interface {
 // Saver описывает механизм сохранения состояния метрик
 // во внешнее хранилище (например, файл).
 type Saver interface {
-	Save(repo repository.Snapshotter) error
+	Save(context.Context, repository.Snapshotter) error
 }
 
 // MetricsService реализует бизнес-логику работы с метриками.
@@ -55,7 +55,7 @@ func (m *MetricsService) UpdateGauge(ctx context.Context, metricName string, val
 		return fmt.Errorf("update gauge: %w", err)
 	}
 
-	if err := m.saveIfSync(); err != nil {
+	if err := m.saveIfSync(ctx); err != nil {
 		return fmt.Errorf("sync save failed: %w", err)
 	}
 
@@ -68,27 +68,22 @@ func (m *MetricsService) UpdateMetrics(ctx context.Context, metrics []model.Metr
 		return fmt.Errorf("update metrics: %w", err)
 	}
 
-	if err := m.saveIfSync(); err != nil {
+	if err := m.saveIfSync(ctx); err != nil {
 		return fmt.Errorf("sync save failed: %w", err)
 	}
 
 	return nil
 }
 
-// UpdateCounter увеличивает значение counter-метрики на delta
-// и возвращает итоговое значение счётчика.
+// UpdateCounter увеличивает значение counter-метрики на delta и возвращает итоговое значение счётчика.
 func (m *MetricsService) UpdateCounter(ctx context.Context, metricName string, delta int64) (int64, error) {
-	if err := m.repo.UpdateCounter(ctx, metricName, delta); err != nil {
+	total, err := m.repo.UpdateCounter(ctx, metricName, delta)
+	if err != nil {
 		return 0, fmt.Errorf("update counter: %w", err)
 	}
 
-	if err := m.saveIfSync(); err != nil {
+	if err := m.saveIfSync(ctx); err != nil {
 		return 0, fmt.Errorf("sync save failed: %w", err)
-	}
-
-	total, err := m.repo.GetCounter(ctx, metricName)
-	if err != nil {
-		return 0, fmt.Errorf("get updated counter: %w", err)
 	}
 
 	return total, nil
@@ -123,10 +118,10 @@ func (m *MetricsService) Snapshot(ctx context.Context) (map[string]float64, map[
 	return m.repo.Snapshot(ctx)
 }
 
-func (m *MetricsService) saveIfSync() error {
+func (m *MetricsService) saveIfSync(ctx context.Context) error {
 	if m.syncPersistence == nil {
 		return nil
 	}
 
-	return m.syncPersistence.Save(m.repo)
+	return m.syncPersistence.Save(ctx, m.repo)
 }

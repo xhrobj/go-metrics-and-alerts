@@ -44,26 +44,35 @@ func (p *PostgresStorage) UpdateGauge(ctx context.Context, metricName string, va
 	})
 }
 
-// UpdateCounter увеличивает значение counter-метрики на delta.
-// Если метрика ещё не существует, она создаётся.
-func (p *PostgresStorage) UpdateCounter(ctx context.Context, metricName string, delta int64) error {
-	return retryDBOperation(ctx, func() error {
-		_, err := p.db.ExecContext(
+// UpdateCounter увеличивает значение counter-метрики на delta
+// и возвращает итоговое значение счётчика.
+// Если метрика еще не существует, она создаётся.
+func (p *PostgresStorage) UpdateCounter(ctx context.Context, metricName string, delta int64) (int64, error) {
+	var total int64
+
+	err := retryDBOperation(ctx, func() error {
+		err := p.db.QueryRowContext(
 			ctx,
 			`INSERT INTO metrics (id, type, total)
-		 	 VALUES ($1, 'counter', $2)
-		 	 ON CONFLICT (id, type)
-		 	 DO UPDATE SET total = metrics.total + EXCLUDED.total`,
+			 VALUES ($1, 'counter', $2)
+			 ON CONFLICT (id, type)
+			 DO UPDATE SET total = metrics.total + EXCLUDED.total
+			 RETURNING total`,
 			metricName,
 			delta,
-		)
+		).Scan(&total)
 
 		if err != nil {
-			return fmt.Errorf("exec upsert counter query: %w", err)
+			return fmt.Errorf("upsert counter query: %w", err)
 		}
 
 		return nil
 	})
+	if err != nil {
+		return 0, err
+	}
+
+	return total, nil
 }
 
 // UpdateMetrics пакетно обновляет метрики в рамках одной транзакции.
@@ -272,10 +281,24 @@ func retryDBOperation(ctx context.Context, op func() error) error {
 			return lastErr
 		}
 
-		time.Sleep(retryDelays[attempt])
+		if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
+			return err
+		}
 	}
 
 	return lastErr
+}
+
+func waitRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func isRetriablePGError(err error) bool {

@@ -23,7 +23,7 @@ func TestGzipMiddleware(t *testing.T) {
 	h := handler.New(srv, nil)
 	log := zap.NewNop()
 
-	r := router.New(h, log, "")
+	r := router.New(h, log, router.Options{})
 
 	ts := httptest.NewServer(r)
 	defer ts.Close()

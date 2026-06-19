@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"io"
 	"log"
 	"os"
@@ -30,12 +32,24 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := run(); err != nil {
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+	)
+	defer stop()
+
+	if err := run(ctx); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
+
 		log.Fatal(err)
 	}
 }
 
-func run() error {
+func run(ctx context.Context) error {
 	cfg, err := config.GetAgentConfig()
 	if err != nil {
 		return err
@@ -53,23 +67,19 @@ func run() error {
 		return err
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	a.Run(ctx)
-
-	return nil
+	return a.Run(ctx)
 }
 
 func printBanner(w io.Writer) error {
 	const banner = `
-   _____          __         .__                 _____                         __   
-  /     \   _____/  |________|__| ____   ______ /  _  \    ____   ____   _____/  |_ 
+   _____          __         .__                 _____                         __
+  /     \   _____/  |________|__| ____   ______ /  _  \    ____   ____   _____/  |_
  /  \ /  \_/ __ \   __\_  __ \  |/ ___\ /  ___//  /_\  \  / ___\_/ __ \ /    \   __\
-/    Y    \  ___/|  |  |  | \/  \  \___ \___ \/    |    \/ /_/  >  ___/|   |  \  |  
-\____|__  /\___  >__|  |__|  |__|\___  >____  >____|__  /\___  / \___  >___|  /__|  
+/    Y    \  ___/|  |  |  | \/  \  \___ \___ \/    |    \/ /_/  >  ___/|   |  \  |
+\____|__  /\___  >__|  |__|  |__|\___  >____  >____|__  /\___  / \___  >___|  /__|
         \/     \/                    \/     \/        \//_____/      \/     \/
-	`
+
+`
 	_, err := io.WriteString(w, banner)
 
 	return err

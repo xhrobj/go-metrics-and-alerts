@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 )
@@ -22,7 +23,7 @@ func (a *Agent) report() {
 		return
 	}
 
-	metrics, err := a.buildMetricsBatch(pollCount)
+	metrics, err := a.buildMetricsBatch(context.Background(), pollCount)
 	if err != nil {
 		// метод poll() в соседней горутине мог уже подинкрементить этот счетчик,
 		// поэтому не восстановим, а добавим запомненное ранее значение обратно
@@ -46,8 +47,8 @@ func (a *Agent) report() {
 	}
 }
 
-func (a *Agent) buildMetricsBatch(pollCount int64) ([]model.Metrics, error) {
-	gauges, _, err := a.repo.Snapshot(context.Background())
+func (a *Agent) buildMetricsBatch(ctx context.Context, pollCount int64) ([]model.Metrics, error) {
+	gauges, _, err := a.repo.Snapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot metrics: %w", err)
 	}
@@ -77,23 +78,40 @@ func (a *Agent) buildMetricsBatch(pollCount int64) ([]model.Metrics, error) {
 }
 
 func (a *Agent) sendMetrics(ctx context.Context, metrics []model.Metrics) error {
-	body, err := json.Marshal(metrics)
+	body, err := prepareRequestBody(metrics)
 	if err != nil {
-		return fmt.Errorf("marshal metrics batch: %w", err)
+		return err
 	}
 
-	compressedBody, err := gzipCompress(body)
-	if err != nil {
-		return fmt.Errorf("gzip compress metrics batch: %w", err)
+	if a.publicKey != nil {
+		body, err = encryption.Encrypt(body, a.publicKey)
+		if err != nil {
+			return fmt.Errorf("encrypt metrics batch: %w", err)
+		}
 	}
 
-	hashValue := hash.CalcHash(compressedBody, a.hashKey)
+	// хеш вычисляется от тех же байтов, что будут отправлены Серверу
+	hashValue := hash.CalcHash(body, a.hashKey)
 
-	if err := a.postWithRetry(ctx, "/updates", compressedBody, hashValue); err != nil {
+	if err := a.postWithRetry(ctx, "/updates", body, hashValue); err != nil {
 		return fmt.Errorf("send metrics batch: %w", err)
 	}
 
 	return nil
+}
+
+func prepareRequestBody(metrics []model.Metrics) ([]byte, error) {
+	body, err := json.Marshal(metrics)
+	if err != nil {
+		return nil, fmt.Errorf("marshal metrics batch: %w", err)
+	}
+
+	compressedBody, err := gzipCompress(body)
+	if err != nil {
+		return nil, fmt.Errorf("gzip compress metrics batch: %w", err)
+	}
+
+	return compressedBody, nil
 }
 
 func gzipCompress(data []byte) ([]byte, error) {
@@ -138,6 +156,10 @@ func (a *Agent) postWithRetry(
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Content-Encoding", "gzip").
 			SetBody(body)
+
+		if a.publicKey != nil {
+			req.SetHeader(encryption.HeaderContentEncryption, encryption.SchemeRSAOAEPWithAESGCM)
+		}
 
 		if hashValue != "" {
 			req.SetHeader("HashSHA256", hashValue)
