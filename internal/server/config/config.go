@@ -5,9 +5,9 @@ import (
 	"os"
 )
 
-// ServerConfig содержит параметры конфигурации HTTP-сервера.
+// ServerConfig содержит параметры конфигурации Сервера.
 type ServerConfig struct {
-	// ServerAddr - адрес и порт запуска HTTP-сервера.
+	// ServerAddr - адрес и порт запуска HTTP-Сервера.
 	ServerAddr string
 
 	// StoreIntervalInSec - интервал сохранения метрик на диск в секундах.
@@ -43,7 +43,7 @@ type ServerConfig struct {
 	AuditURL string
 }
 
-// GetServerConfig возвращает конфигурацию HTTP-сервера.
+// GetServerConfig возвращает конфигурацию Сервера.
 //
 // Значения параметров могут быть заданы через:
 //   - флаги: -a -i -f -r -d -k --crypto-key -t --audit-file --audit-url -c/--config

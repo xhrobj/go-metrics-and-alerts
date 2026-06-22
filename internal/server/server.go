@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/service"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/router"

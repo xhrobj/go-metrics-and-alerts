@@ -1,8 +1,8 @@
 package server
 
 import (
-	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/audit"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
 	"go.uber.org/zap"
 )

@@ -14,6 +14,11 @@ agent.Agent
 internal/agent/
 ├── agent.go
 ├── report.go
+├── config/
+│   ├── config.go
+│   ├── file.go
+│   ├── env.go
+│   └── validation.go
 ├── service/
 │   ├── service.go
 │   ├── poll.go
@@ -25,6 +30,7 @@ internal/agent/
 ```
 
 - `agent` управляет ticker'ами, очередью, worker'ами и graceful shutdown
+- `agent/config` загружает и валидирует конфигурацию Агента
 - `agent/service` собирает метрики, хранит `PollCount`, формирует batch и восстанавливает счетчик при ошибках
 - `agent/service.MetricsSender` задает транспортный порт отправки
 - `agent/transport/http` реализует текущую HTTP-доставку
@@ -114,5 +120,6 @@ snapshot
 
 Задачи отправки проходят через буферизированную очередь, которой управляет `Agent`. Количество worker'ов и размер очереди определяются `RATE_LIMIT`.
 
+## Конфигурация
 
-
+Загрузка и валидация параметров описаны в [`internal/agent/config`](config/README.md).

@@ -11,9 +11,9 @@ import (
 	"syscall"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/buildinfo"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/config"
 )
 
 var (

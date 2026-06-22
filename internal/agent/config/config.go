@@ -28,7 +28,7 @@ type AgentConfig struct {
 	CryptoKey string
 }
 
-// GetAgentConfig возвращает конфигурацию агента.
+// GetAgentConfig возвращает конфигурацию Агента.
 //
 // Значения параметров могут быть заданы через:
 //   - флаги: -a -p -r -l -k --crypto-key -c/--config

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/service"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"go.uber.org/zap"

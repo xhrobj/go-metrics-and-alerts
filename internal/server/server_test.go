@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/config"
 	"go.uber.org/zap"
 )
 

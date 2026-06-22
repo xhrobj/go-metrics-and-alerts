@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/service"
 	"go.uber.org/zap"
 )

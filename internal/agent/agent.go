@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/service"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"go.uber.org/zap"
 )
 
