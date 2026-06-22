@@ -5,20 +5,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/service"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"go.uber.org/zap"
 )
 
-// TestAgentReportQueuesPreparedBatch проверяет границу Agent -> ReportingService:
-// runtime ставит подготовленный сервисом batch в очередь отправки.
-func TestAgentReportQueuesPreparedBatch(t *testing.T) {
-	repo := repository.NewMemStorage()
-	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
-		t.Fatalf("UpdateGauge() error = %v, want nil", err)
+// TestAgentReportQueuesPreparedReport проверяет границу Agent -> ReportingService:
+// runtime ставит подготовленный сервисом отчёт в очередь отправки.
+func TestAgentReportQueuesPreparedReport(t *testing.T) {
+	wantReport := service.Report{Metrics: []model.Metrics{{ID: "Alloc"}}, PollCount: 3}
+	service := &reportingServiceStub{
+		preparePeriodicReportFunc: func(context.Context) (service.Report, bool, error) {
+			return wantReport, true, nil
+		},
 	}
 
-	service := NewReportingService(repo, newNoopSender(), zap.NewNop())
 	a, err := New(service, config.AgentConfig{
 		PollIntervalInSec:   2,
 		ReportIntervalInSec: 10,
@@ -28,32 +30,42 @@ func TestAgentReportQueuesPreparedBatch(t *testing.T) {
 		t.Fatalf("New() error = %v, want nil", err)
 	}
 
-	service.pollSinceReport.Store(3)
 	a.report()
 
-	var task reportTask
 	select {
-	case task = <-a.recvQueue:
+	case gotReport := <-a.recvQueue:
+		if got, want := gotReport.PollCount, wantReport.PollCount; got != want {
+			t.Fatalf("PollCount = %d, want %d", got, want)
+		}
+		if got, want := gotReport.Metrics[0].ID, "Alloc"; got != want {
+			t.Fatalf("metric ID = %q, want %q", got, want)
+		}
 	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for report task")
-	}
-
-	assertMetricValue(t, task.metrics, "Alloc", 5.11)
-	assertMetricDelta(t, task.metrics, "PollCount", 3)
-
-	if got := service.pollSinceReport.Load(); got != 0 {
-		t.Fatalf("pollSinceReport = %d, want 0", got)
+		t.Fatal("timeout waiting for report")
 	}
 }
 
-// TestAgentReportRestoresPollCountWhenQueueIsFull проверяет,
-// что runtime возвращает сервису счётчик непринятой очередью задачи.
-func TestAgentReportRestoresPollCountWhenQueueIsFull(t *testing.T) {
-	service := NewReportingService(
-		repository.NewMemStorage(),
-		newNoopSender(),
-		zap.NewNop(),
-	)
+// TestAgentReportRestoresReportWhenQueueIsFull проверяет,
+// что runtime возвращает сервису отчёт, не принятый заполненной очередью.
+func TestAgentReportRestoresReportWhenQueueIsFull(t *testing.T) {
+	reports := []service.Report{
+		{PollCount: 1},
+		{PollCount: 2},
+	}
+	prepareCall := 0
+	restored := make(chan service.Report, 1)
+
+	service := &reportingServiceStub{
+		preparePeriodicReportFunc: func(context.Context) (service.Report, bool, error) {
+			report := reports[prepareCall]
+			prepareCall++
+			return report, true, nil
+		},
+		restoreFunc: func(report service.Report) {
+			restored <- report
+		},
+	}
+
 	a, err := New(service, config.AgentConfig{
 		PollIntervalInSec:   2,
 		ReportIntervalInSec: 10,
@@ -63,13 +75,15 @@ func TestAgentReportRestoresPollCountWhenQueueIsFull(t *testing.T) {
 		t.Fatalf("New() error = %v, want nil", err)
 	}
 
-	service.pollSinceReport.Store(1)
+	a.report()
 	a.report()
 
-	service.pollSinceReport.Store(2)
-	a.report()
-
-	if got, want := service.pollSinceReport.Load(), int64(2); got != want {
-		t.Fatalf("pollSinceReport = %d, want %d", got, want)
+	select {
+	case gotReport := <-restored:
+		if got, want := gotReport.PollCount, int64(2); got != want {
+			t.Fatalf("restored PollCount = %d, want %d", got, want)
+		}
+	default:
+		t.Fatal("Restore() was not called")
 	}
 }

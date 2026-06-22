@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/service"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"go.uber.org/zap"
 )
 
@@ -29,22 +29,54 @@ func TestNewReturnsErrorForNilReportingService(t *testing.T) {
 	}
 }
 
-// TestRunDrainsQueueAndSendsFinalSnapshot проверяет, что при shutdown Агент
-// дожидается активной отправки, опустошает очередь и отправляет финальный снимок.
-func TestRunDrainsQueueAndSendsFinalSnapshot(t *testing.T) {
+func TestNewReturnsErrorForTypedNilReportingService(t *testing.T) {
+	cfg := config.AgentConfig{
+		PollIntervalInSec:   2,
+		ReportIntervalInSec: 10,
+		RateLimit:           5,
+	}
+
+	var reportingService *reportingServiceStub
+
+	_, err := New(reportingService, cfg, zap.NewNop())
+	if err == nil {
+		t.Fatal("New() error = nil, want error")
+	}
+
+	if got, want := err.Error(), "reporting service is nil"; got != want {
+		t.Fatalf("New() error = %q, want %q", got, want)
+	}
+}
+
+// TestRunDrainsQueueBeforeFlush проверяет, что при shutdown Агент
+// дожидается активной отправки, опустошает очередь и только затем вызывает Flush.
+func TestRunDrainsQueueBeforeFlush(t *testing.T) {
 	firstSendStarted := make(chan struct{})
 	allowFirstSendToFinish := make(chan struct{})
-	sentMetrics := make(chan []model.Metrics, 2)
+	flushCalled := make(chan struct{})
 
 	var sendCount atomic.Int32
-	sender := senderFunc(func(_ context.Context, metrics []model.Metrics) error {
-		sentMetrics <- metrics
-		if sendCount.Add(1) == 1 {
-			close(firstSendStarted)
-			<-allowFirstSendToFinish
-		}
-		return nil
-	})
+	report := service.Report{Metrics: []model.Metrics{{ID: "Alloc"}}, PollCount: 42}
+
+	service := &reportingServiceStub{
+		preparePeriodicReportFunc: func(context.Context) (service.Report, bool, error) {
+			return report, true, nil
+		},
+		sendFunc: func(_ context.Context, got service.Report) error {
+			if got.PollCount != report.PollCount {
+				t.Errorf("Send() pollCount = %d, want %d", got.PollCount, report.PollCount)
+			}
+			if sendCount.Add(1) == 1 {
+				close(firstSendStarted)
+				<-allowFirstSendToFinish
+			}
+			return nil
+		},
+		flushFunc: func(context.Context) error {
+			close(flushCalled)
+			return nil
+		},
+	}
 
 	t.Cleanup(func() {
 		select {
@@ -54,24 +86,15 @@ func TestRunDrainsQueueAndSendsFinalSnapshot(t *testing.T) {
 		}
 	})
 
-	cfg := config.AgentConfig{
+	a, err := New(service, config.AgentConfig{
 		PollIntervalInSec:   3600,
 		ReportIntervalInSec: 3600,
 		RateLimit:           1,
-	}
-
-	repo := repository.NewMemStorage()
-	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
-		t.Fatalf("UpdateGauge() error = %v, want nil", err)
-	}
-
-	service := NewReportingService(repo, sender, zap.NewNop())
-	a, err := New(service, cfg, zap.NewNop())
+	}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("New() error = %v, want nil", err)
 	}
 
-	service.pollSinceReport.Store(42)
 	a.report()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -88,11 +111,6 @@ func TestRunDrainsQueueAndSendsFinalSnapshot(t *testing.T) {
 		t.Fatal("timeout waiting for active send")
 	}
 
-	if err := repo.UpdateGauge(context.Background(), "Alloc", 6.11); err != nil {
-		t.Fatalf("UpdateGauge() error = %v, want nil", err)
-	}
-	service.pollSinceReport.Store(7)
-
 	cancel()
 
 	select {
@@ -101,17 +119,13 @@ func TestRunDrainsQueueAndSendsFinalSnapshot(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 
-	close(allowFirstSendToFinish)
-
-	var gotBatches [][]model.Metrics
-	for range 2 {
-		select {
-		case metrics := <-sentMetrics:
-			gotBatches = append(gotBatches, metrics)
-		case <-time.After(time.Second):
-			t.Fatal("timeout waiting for metrics batch")
-		}
+	select {
+	case <-flushCalled:
+		t.Fatal("Flush() called before active send completed")
+	default:
 	}
+
+	close(allowFirstSendToFinish)
 
 	select {
 	case err := <-runErrCh:
@@ -122,53 +136,13 @@ func TestRunDrainsQueueAndSendsFinalSnapshot(t *testing.T) {
 		t.Fatal("timeout waiting for Run() to stop")
 	}
 
-	if got, want := sendCount.Load(), int32(2); got != want {
+	select {
+	case <-flushCalled:
+	default:
+		t.Fatal("Flush() was not called")
+	}
+
+	if got, want := sendCount.Load(), int32(1); got != want {
 		t.Fatalf("send count = %d, want %d", got, want)
 	}
-
-	assertMetricValue(t, gotBatches[0], "Alloc", 5.11)
-	assertMetricDelta(t, gotBatches[0], "PollCount", 42)
-	assertMetricValue(t, gotBatches[1], "Alloc", 6.11)
-	assertMetricDelta(t, gotBatches[1], "PollCount", 7)
-}
-
-func assertMetricValue(
-	t *testing.T,
-	metrics []model.Metrics,
-	name string,
-	want float64,
-) {
-	t.Helper()
-
-	for _, metric := range metrics {
-		if metric.ID == name && metric.MType == model.Gauge {
-			if metric.Value == nil {
-				t.Fatalf("metric %q value = nil, want %v", name, want)
-			}
-			if got := *metric.Value; got != want {
-				t.Fatalf("metric %q value = %v, want %v", name, got, want)
-			}
-			return
-		}
-	}
-
-	t.Fatalf("metric %q not found", name)
-}
-
-func assertMetricDelta(t *testing.T, metrics []model.Metrics, name string, want int64) {
-	t.Helper()
-
-	for _, metric := range metrics {
-		if metric.ID == name && metric.MType == model.Counter {
-			if metric.Delta == nil {
-				t.Fatalf("metric %q delta = nil, want %d", name, want)
-			}
-			if got := *metric.Delta; got != want {
-				t.Fatalf("metric %q delta = %d, want %d", name, got, want)
-			}
-			return
-		}
-	}
-
-	t.Fatalf("metric %q not found", name)
 }

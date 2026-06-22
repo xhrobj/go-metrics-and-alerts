@@ -1,4 +1,4 @@
-package agent
+package service
 
 import (
 	"context"
@@ -8,12 +8,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// pollRuntime() выставляет RandomValue и добавляет runtime-метрики.
+// PollRuntime() выставляет RandomValue и добавляет runtime-метрики.
 func TestReportingServicePollRuntimeUpdatesMetrics(t *testing.T) {
 	repo := repository.NewMemStorage()
-	service := NewReportingService(repo, newNoopSender(), zap.NewNop())
+	service := New(repo, newNoopSender(), zap.NewNop())
 
-	service.pollRuntime()
+	service.PollRuntime()
 
 	gauges, _, err := repo.Snapshot(context.Background())
 	if err != nil {
@@ -31,12 +31,12 @@ func TestReportingServicePollRuntimeUpdatesMetrics(t *testing.T) {
 	}
 }
 
-// pollSystem() сохраняет в хранилище системные метрики.
+// PollSystem() сохраняет в хранилище системные метрики.
 func TestReportingServicePollSystemStoresSystemMetrics(t *testing.T) {
 	repo := repository.NewMemStorage()
-	service := NewReportingService(repo, newNoopSender(), zap.NewNop())
+	service := New(repo, newNoopSender(), zap.NewNop())
 
-	service.pollSystem()
+	service.PollSystem()
 
 	gauges, _, err := repo.Snapshot(context.Background())
 	if err != nil {

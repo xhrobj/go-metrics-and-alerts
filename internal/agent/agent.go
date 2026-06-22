@@ -3,53 +3,75 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/service"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"go.uber.org/zap"
 )
 
 const shutdownTimeout = time.Second * 30
 
+// ReportingService описывает сервис метрик, которым управляет Agent.
+type ReportingService interface {
+	InitSystemPoll()
+	PollRuntime()
+	PollSystem()
+	PreparePeriodicReport(context.Context) (service.Report, bool, error)
+	Send(context.Context, service.Report) error
+	Restore(service.Report)
+	Flush(context.Context) error
+}
+
 // Agent управляет runtime Агента: ticker'ами, очередью отправки,
 // worker'ами и graceful shutdown.
 type Agent struct {
-	service             *ReportingService
+	service             ReportingService
 	pollIntervalInSec   int
 	reportIntervalInSec int
 	rateLimit           int
 	log                 *zap.Logger
 
 	// sendQueue используется report() для постановки задач на отправку.
-	sendQueue chan<- reportTask
+	sendQueue chan<- service.Report
 	// recvQueue используется send worker'ами для чтения задач из той же очереди.
-	recvQueue <-chan reportTask
+	recvQueue <-chan service.Report
 }
 
 // New создаёт нового Агента с указанными параметрами конфигурации.
-func New(service *ReportingService, cfg config.AgentConfig, log *zap.Logger) (*Agent, error) {
+func New(reportingService ReportingService, cfg config.AgentConfig, log *zap.Logger) (*Agent, error) {
 	if log == nil {
 		log = zap.NewNop()
 	}
-	if service == nil {
+	if isNilReportingService(reportingService) {
 		return nil, fmt.Errorf("reporting service is nil")
 	}
 
 	if cfg.PollIntervalInSec <= 0 {
-		return nil, fmt.Errorf("poll interval must be > 0, got %d", cfg.PollIntervalInSec)
+		return nil, fmt.Errorf(
+			"poll interval must be > 0, got %d",
+			cfg.PollIntervalInSec,
+		)
 	}
 	if cfg.ReportIntervalInSec <= 0 {
-		return nil, fmt.Errorf("report interval must be > 0, got %d", cfg.ReportIntervalInSec)
+		return nil, fmt.Errorf(
+			"report interval must be > 0, got %d",
+			cfg.ReportIntervalInSec,
+		)
 	}
 	if cfg.RateLimit <= 0 {
-		return nil, fmt.Errorf("rate limit must be > 0, got %d", cfg.RateLimit)
+		return nil, fmt.Errorf(
+			"rate limit must be > 0, got %d",
+			cfg.RateLimit,
+		)
 	}
 
-	queue := make(chan reportTask, cfg.RateLimit)
+	queue := make(chan service.Report, cfg.RateLimit)
 
 	return &Agent{
-		service:             service,
+		service:             reportingService,
 		pollIntervalInSec:   cfg.PollIntervalInSec,
 		reportIntervalInSec: cfg.ReportIntervalInSec,
 		rateLimit:           cfg.RateLimit,
@@ -57,6 +79,20 @@ func New(service *ReportingService, cfg config.AgentConfig, log *zap.Logger) (*A
 		sendQueue:           queue,
 		recvQueue:           queue,
 	}, nil
+}
+
+func isNilReportingService(reportingService ReportingService) bool {
+	if reportingService == nil {
+		return true
+	}
+
+	value := reflect.ValueOf(reportingService)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // Run запускает независимые горутины сбора и отправки метрик.
@@ -116,7 +152,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		return fmt.Errorf("wait send workers: %w", err)
 	}
 
-	if err := a.service.flush(shutdownCtx); err != nil {
+	if err := a.service.Flush(shutdownCtx); err != nil {
 		return err
 	}
 
@@ -150,7 +186,7 @@ func (a *Agent) runRuntimePollLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			a.service.pollRuntime()
+			a.service.PollRuntime()
 		}
 	}
 }
@@ -159,14 +195,14 @@ func (a *Agent) runSystemPollLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
 	defer ticker.Stop()
 
-	a.service.initSystemPoll()
+	a.service.InitSystemPoll()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			a.service.pollSystem()
+			a.service.PollSystem()
 		}
 	}
 }
@@ -190,13 +226,13 @@ func (a *Agent) runSendWorker(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case task, ok := <-a.recvQueue:
+		case report, ok := <-a.recvQueue:
 			if !ok {
 				return
 			}
-			if err := a.service.send(ctx, task); err != nil {
+			if err := a.service.Send(ctx, report); err != nil {
 				a.log.Error("send metrics failed",
-					zap.Int64("pollCount", task.pollCount),
+					zap.Int64("pollCount", report.PollCount),
 					zap.Error(err),
 				)
 			}

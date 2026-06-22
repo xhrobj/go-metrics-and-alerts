@@ -1,4 +1,4 @@
-package agent
+package service
 
 import (
 	"context"
@@ -25,20 +25,47 @@ func (s *snapshotErrorStorage) Snapshot(
 	return nil, nil, s.err
 }
 
+// TestReportingServicePreparePeriodicReport проверяет формирование отчёта
+// и сброс накопленного PollCount.
+func TestReportingServicePreparePeriodicReport(t *testing.T) {
+	repo := repository.NewMemStorage()
+	if err := repo.UpdateGauge(context.Background(), "Alloc", 5.11); err != nil {
+		t.Fatalf("UpdateGauge() error = %v, want nil", err)
+	}
+
+	service := New(repo, newNoopSender(), zap.NewNop())
+	service.pollSinceReport.Store(3)
+
+	report, ok, err := service.PreparePeriodicReport(context.Background())
+	if err != nil {
+		t.Fatalf("PreparePeriodicReport() error = %v, want nil", err)
+	}
+	if !ok {
+		t.Fatal("PreparePeriodicReport() ok = false, want true")
+	}
+
+	assertMetricValue(t, report.Metrics, "Alloc", 5.11)
+	assertMetricDelta(t, report.Metrics, "PollCount", 3)
+
+	if got := service.pollSinceReport.Load(); got != 0 {
+		t.Fatalf("pollSinceReport = %d, want 0", got)
+	}
+}
+
 // TestReportingServiceFlushRestoresPollCountOnSnapshotError проверяет,
 // что сервис возвращает PollCount при ошибке финального snapshot.
 func TestReportingServiceFlushRestoresPollCountOnSnapshotError(t *testing.T) {
 	wantErr := errors.New("snapshot failed")
-	service := NewReportingService(
+	service := New(
 		&snapshotErrorStorage{err: wantErr},
 		newNoopSender(),
 		zap.NewNop(),
 	)
 	service.pollSinceReport.Store(42)
 
-	err := service.flush(context.Background())
+	err := service.Flush(context.Background())
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("flush() error = %v, want error wrapping %v", err, wantErr)
+		t.Fatalf("Flush() error = %v, want error wrapping %v", err, wantErr)
 	}
 	if got, want := service.pollSinceReport.Load(), int64(42); got != want {
 		t.Fatalf("pollSinceReport = %d, want %d", got, want)
@@ -58,26 +85,26 @@ func TestReportingServiceFlushRestoresPollCountOnSendError(t *testing.T) {
 		t.Fatalf("UpdateGauge() error = %v, want nil", err)
 	}
 
-	service := NewReportingService(repo, sender, zap.NewNop())
+	service := New(repo, sender, zap.NewNop())
 	service.pollSinceReport.Store(42)
 
-	err := service.flush(context.Background())
+	err := service.Flush(context.Background())
 	if err == nil {
-		t.Fatal("flush() error = nil, want error")
+		t.Fatal("Flush() error = nil, want error")
 	}
 	if got, want := err.Error(), "send final metrics batch"; !strings.Contains(got, want) {
-		t.Fatalf("flush() error = %q, want error containing %q", got, want)
+		t.Fatalf("Flush() error = %q, want error containing %q", got, want)
 	}
 	if got, want := service.pollSinceReport.Load(), int64(42); got != want {
 		t.Fatalf("pollSinceReport = %d, want %d", got, want)
 	}
 }
 
-// TestReportingServiceSendRestoresOnlyFailedTaskPollCount проверяет,
+// TestReportingServiceSendRestoresOnlyFailedReportPollCount проверяет,
 // что ошибка отправки не затирает новые poll'ы, накопленные параллельно.
-func TestReportingServiceSendRestoresOnlyFailedTaskPollCount(t *testing.T) {
+func TestReportingServiceSendRestoresOnlyFailedReportPollCount(t *testing.T) {
 	wantErr := errors.New("send failed")
-	service := NewReportingService(
+	service := New(
 		repository.NewMemStorage(),
 		senderFunc(func(context.Context, []model.Metrics) error {
 			return wantErr
@@ -85,12 +112,12 @@ func TestReportingServiceSendRestoresOnlyFailedTaskPollCount(t *testing.T) {
 		zap.NewNop(),
 	)
 
-	task := reportTask{pollCount: 42}
+	report := Report{PollCount: 42}
 	service.pollSinceReport.Store(7)
 
-	err := service.send(context.Background(), task)
+	err := service.Send(context.Background(), report)
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("send() error = %v, want %v", err, wantErr)
+		t.Fatalf("Send() error = %v, want %v", err, wantErr)
 	}
 	if got, want := service.pollSinceReport.Load(), int64(49); got != want {
 		t.Fatalf("pollSinceReport = %d, want %d", got, want)
@@ -105,13 +132,13 @@ func TestReportingServicePrepareFinalReportIncludesZeroPollCount(t *testing.T) {
 		t.Fatalf("UpdateGauge() error = %v, want nil", err)
 	}
 
-	service := NewReportingService(repo, newNoopSender(), zap.NewNop())
+	service := New(repo, newNoopSender(), zap.NewNop())
 
-	task, err := service.prepareFinalReport(context.Background())
+	report, err := service.prepareFinalReport(context.Background())
 	if err != nil {
 		t.Fatalf("prepareFinalReport() error = %v, want nil", err)
 	}
 
-	assertMetricValue(t, task.metrics, "TotalMemory", 5.11)
-	assertMetricDelta(t, task.metrics, "PollCount", 0)
+	assertMetricValue(t, report.Metrics, "TotalMemory", 5.11)
+	assertMetricDelta(t, report.Metrics, "PollCount", 0)
 }

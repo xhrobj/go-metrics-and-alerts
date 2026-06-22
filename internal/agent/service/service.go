@@ -1,4 +1,6 @@
-package agent
+// Package service реализует прикладные сценарии Агента:
+// сбор метрик, формирование отчётов и их отправку.
+package service
 
 import (
 	"context"
@@ -14,9 +16,10 @@ type AgentStorage interface {
 	Snapshot(context.Context) (map[string]float64, map[string]int64, error)
 }
 
-type reportTask struct {
-	metrics   []model.Metrics
-	pollCount int64
+// Report содержит подготовленный batch метрик и соответствующее ему значение PollCount.
+type Report struct {
+	Metrics   []model.Metrics
+	PollCount int64
 }
 
 // ReportingService реализует прикладные сценарии Агента:
@@ -26,17 +29,13 @@ type ReportingService struct {
 	sender MetricsSender
 	log    *zap.Logger
 
-	// pollSinceReport - количество вызовов pollRuntime() с момента последней
+	// pollSinceReport - количество вызовов PollRuntime() с момента последней
 	// успешной отправки отчёта. Используется для формирования метрики PollCount.
 	pollSinceReport atomic.Int64
 }
 
-// NewReportingService создаёт сервис отчётности Агента.
-func NewReportingService(
-	repo AgentStorage,
-	sender MetricsSender,
-	log *zap.Logger,
-) *ReportingService {
+// New создаёт сервис отчётности Агента.
+func New(repo AgentStorage, sender MetricsSender, log *zap.Logger) *ReportingService {
 	if log == nil {
 		log = zap.NewNop()
 	}

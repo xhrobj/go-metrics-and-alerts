@@ -11,6 +11,8 @@ import (
 	"syscall"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/agent"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/service"
+	httptransport "github.com/xhrobj/go-metrics-and-alerts/internal/agent/transport/http"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/buildinfo"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
@@ -59,15 +61,19 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	sender, err := agent.NewHTTPSender(cfg.ServerAddr, cfg.Key, cfg.CryptoKey)
+	sender, err := httptransport.NewHTTPSender(
+		cfg.ServerAddr,
+		cfg.Key,
+		cfg.CryptoKey,
+	)
 	if err != nil {
 		return err
 	}
 
 	repo := repository.NewMemStorage()
-	service := agent.NewReportingService(repo, sender, lg)
+	reportingService := service.New(repo, sender, lg)
 
-	a, err := agent.New(service, cfg, lg)
+	a, err := agent.New(reportingService, cfg, lg)
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-package agent
+package service
 
 import (
 	"context"
@@ -11,7 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func (s *ReportingService) initSystemPoll() {
+// InitSystemPoll инициализирует базу для вычисления загрузки CPU.
+func (s *ReportingService) InitSystemPoll() {
 	// NOTE: Первый вызов нужен, чтобы инициализировать базу для cpu.Percent(0, true).
 	// https://pkg.go.dev/github.com/shirou/gopsutil/v4/cpu
 	if _, err := cpu.Percent(0, true); err != nil {
@@ -19,7 +20,8 @@ func (s *ReportingService) initSystemPoll() {
 	}
 }
 
-func (s *ReportingService) pollRuntime() {
+// PollRuntime собирает runtime-метрики Агента.
+func (s *ReportingService) PollRuntime() {
 	ctx := context.Background()
 
 	s.log.Info("poll runtime",
@@ -62,7 +64,8 @@ func (s *ReportingService) pollRuntime() {
 	s.pollSinceReport.Add(1)
 }
 
-func (s *ReportingService) pollSystem() {
+// PollSystem собирает системные метрики памяти и CPU.
+func (s *ReportingService) PollSystem() {
 	ctx := context.Background()
 
 	s.log.Info("poll system")

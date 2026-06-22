@@ -1,4 +1,4 @@
-package agent
+package httptransport
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/service"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
@@ -28,7 +29,7 @@ type HTTPSender struct {
 	client    *resty.Client
 }
 
-var _ MetricsSender = (*HTTPSender)(nil)
+var _ service.MetricsSender = (*HTTPSender)(nil)
 
 // NewHTTPSender создаёт HTTP-отправитель метрик.
 func NewHTTPSender(serverAddr, hashKey, cryptoKey string) (*HTTPSender, error) {

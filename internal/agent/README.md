@@ -3,17 +3,32 @@
 Пакет разделяет runtime Агента, сервис метрик и транспорт отправки.
 
 ```text
-Agent
--> ReportingService
-  -> MetricsSender
-    -> HTTPSender
-    -> gRPCSender (скоро) 
+agent.Agent
+-> agent/service.ReportingService
+  -> agent/service.MetricsSender
+    <- agent/transport/http.Sender
+    <- agent/transport/grpc.Sender (И28)
 ```
 
-- `Agent` управляет ticker'ами, очередью, worker'ами и graceful shutdown
-- `ReportingService` собирает метрики, хранит `PollCount`, формирует batch и восстанавливает счетчик при ошибках
-- `MetricsSender` задает транспортный порт отправки
-- `HTTPSender` реализует текущую HTTP-доставку
+```text
+internal/agent/
+├── agent.go
+├── report.go
+├── service/
+│   ├── service.go
+│   ├── poll.go
+│   ├── report.go
+│   └── sender.go
+└── transport/
+    └── http/
+        └── sender.go
+```
+
+- `agent` управляет ticker'ами, очередью, worker'ами и graceful shutdown
+- `agent/service` собирает метрики, хранит `PollCount`, формирует batch и восстанавливает счетчик при ошибках
+- `agent/service.MetricsSender` задает транспортный порт отправки
+- `agent/transport/http` реализует текущую HTTP-доставку
+- `cmd/agent` создаёт конкретный транспорт, сервис и runtime Агента
 
 ## Runtime-метрики
 
@@ -83,13 +98,13 @@ Agent
 
 ## Отправка
 
-Отчёт формируется из снимка всех gauge-метрик и текущей delta `PollCount`. После чего `ReportingService` передает готовый batch через `MetricsSender`.
+Отчёт формируется из снимка всех gauge-метрик и текущей delta `PollCount`. После чего `agent/service.ReportingService` передает готовый batch через `MetricsSender`.
 
 ```text
 snapshot
 -> []model.Metrics
 -> MetricsSender
-   -> HTTPSender
+   -> agent/transport/http.Sender
       -> JSON
       -> gzip
       -> optional encryption
@@ -98,3 +113,6 @@ snapshot
 ```
 
 Задачи отправки проходят через буферизированную очередь, которой управляет `Agent`. Количество worker'ов и размер очереди определяются `RATE_LIMIT`.
+
+
+
