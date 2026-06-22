@@ -11,6 +11,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/service"
 	"go.uber.org/zap"
 
+	// Регистрирует драйвер pgx в database/sql.
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

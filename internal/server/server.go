@@ -42,10 +42,15 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 	}
 
 	srv := &Server{
-		cfg:                 cfg,
-		log:                 log,
-		shutdownPersistence: func() error { return nil },
-		cleanupAudit:        func() {},
+		cfg: cfg,
+		log: log,
+		shutdownPersistence: func() error {
+			// 4Sonar: Persistence может быть отключен, завершать нечего
+			return nil
+		},
+		cleanupAudit: func() {
+			// 4Sonar: Аудит может быть отключен, освобождать ресурсы не требуется
+		},
 	}
 
 	defer func() {

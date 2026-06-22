@@ -60,21 +60,7 @@ func TestValidateServerConfig(t *testing.T) {
 				tt.change(&cfg)
 			}
 
-			err := validateServerConfig(cfg)
-			if tt.wantError == "" {
-				if err != nil {
-					t.Fatalf("validateServerConfig() error = %v, want nil", err)
-				}
-				return
-			}
-
-			if err == nil {
-				t.Fatalf("validateServerConfig() error = nil, want %q", tt.wantError)
-			}
-
-			if !strings.Contains(err.Error(), tt.wantError) {
-				t.Fatalf("validateServerConfig() error = %q, want substring %q", err, tt.wantError)
-			}
+			assertValidationResult(t, validateServerConfig(cfg), tt.wantError)
 		})
 	}
 }
@@ -86,5 +72,18 @@ func TestParseServerConfigValidatesResult(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("parseServerConfig() error = nil, want error")
+	}
+}
+
+func assertValidationResult(t *testing.T, err error, wantError string) {
+	t.Helper()
+
+	switch {
+	case wantError == "" && err != nil:
+		t.Fatalf("validation error = %v, want nil", err)
+	case wantError != "" && err == nil:
+		t.Fatalf("validation error = nil, want containing %q", wantError)
+	case wantError != "" && !strings.Contains(err.Error(), wantError):
+		t.Fatalf("validation error = %q, want substring %q", err, wantError)
 	}
 }

@@ -112,6 +112,14 @@ func gzipCompress(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type unexpectedStatusError struct {
+	statusCode int
+}
+
+func (e *unexpectedStatusError) Error() string {
+	return fmt.Sprintf("unexpected status code: %d", e.statusCode)
+}
+
 func (s *HTTPSender) postWithRetry(
 	ctx context.Context,
 	path string,
@@ -131,41 +139,13 @@ func (s *HTTPSender) postWithRetry(
 
 	var lastErr error
 
-	for attempt := 0; attempt <= len(retryDelays); attempt++ {
-		rq := s.client.R().
-			SetContext(ctx).
-			SetHeader(protocol.HeaderContentType, protocol.ContentTypeJSON).
-			SetHeader(protocol.HeaderContentEncoding, protocol.EncodingGzip).
-			SetHeader(protocol.HeaderRealIP, realIP).
-			SetBody(body)
-
-		if s.publicKey != nil {
-			rq.SetHeader(protocol.HeaderContentEncryption, encryption.SchemeRSAOAEPWithAESGCM)
+	for attempt := 0; ; attempt++ {
+		lastErr = s.sendAttempt(ctx, path, body, hashValue, realIP)
+		if lastErr == nil {
+			return nil
 		}
 
-		if hashValue != "" {
-			rq.SetHeader(protocol.HeaderHashSHA256, hashValue)
-		}
-
-		rs, err := rq.Post(s.baseURL + path)
-		if err == nil {
-			if rs.StatusCode() == http.StatusOK {
-				return nil
-			}
-
-			lastErr = fmt.Errorf("unexpected status code: %d", rs.StatusCode())
-			if !isRetriableStatusCode(rs.StatusCode()) || attempt >= len(retryDelays) {
-				return lastErr
-			}
-
-			if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
-				return err
-			}
-			continue
-		}
-
-		lastErr = err
-		if !isRetriableHTTPError(err) || attempt >= len(retryDelays) {
+		if attempt >= len(retryDelays) || !isRetriableSendError(lastErr) {
 			return lastErr
 		}
 
@@ -173,8 +153,49 @@ func (s *HTTPSender) postWithRetry(
 			return err
 		}
 	}
+}
 
-	return lastErr
+func (s *HTTPSender) sendAttempt(
+	ctx context.Context,
+	path string,
+	body []byte,
+	hashValue string,
+	realIP string,
+) error {
+	rq := s.client.R().
+		SetContext(ctx).
+		SetHeader(protocol.HeaderContentType, protocol.ContentTypeJSON).
+		SetHeader(protocol.HeaderContentEncoding, protocol.EncodingGzip).
+		SetHeader(protocol.HeaderRealIP, realIP).
+		SetBody(body)
+
+	if s.publicKey != nil {
+		rq.SetHeader(protocol.HeaderContentEncryption, encryption.SchemeRSAOAEPWithAESGCM)
+	}
+
+	if hashValue != "" {
+		rq.SetHeader(protocol.HeaderHashSHA256, hashValue)
+	}
+
+	rs, err := rq.Post(s.baseURL + path)
+	if err != nil {
+		return err
+	}
+
+	if rs.StatusCode() != http.StatusOK {
+		return &unexpectedStatusError{statusCode: rs.StatusCode()}
+	}
+
+	return nil
+}
+
+func isRetriableSendError(err error) bool {
+	var statusErr *unexpectedStatusError
+	if errors.As(err, &statusErr) {
+		return isRetriableStatusCode(statusErr.statusCode)
+	}
+
+	return isRetriableHTTPError(err)
 }
 
 func localIP() (string, error) {

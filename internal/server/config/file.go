@@ -37,23 +37,10 @@ func loadServerConfigFile(path string, cfg *ServerConfig) error {
 	}
 
 	if fileCfg.StoreInterval != nil {
-		storeInterval, err := time.ParseDuration(*fileCfg.StoreInterval)
+		cfg.StoreIntervalInSec, err = parseStoreInterval(*fileCfg.StoreInterval)
 		if err != nil {
-			return fmt.Errorf(
-				"parse store_interval %q: %w",
-				*fileCfg.StoreInterval,
-				err,
-			)
+			return err
 		}
-
-		if storeInterval%time.Second != 0 {
-			return fmt.Errorf(
-				"parse store_interval %q: duration must contain whole seconds",
-				*fileCfg.StoreInterval,
-			)
-		}
-
-		cfg.StoreIntervalInSec = int(storeInterval / time.Second)
 	}
 
 	if fileCfg.StoreFile != nil {
@@ -89,4 +76,20 @@ func loadServerConfigFile(path string, cfg *ServerConfig) error {
 	}
 
 	return nil
+}
+
+func parseStoreInterval(value string) (int, error) {
+	storeInterval, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("parse store_interval %q: %w", value, err)
+	}
+
+	if storeInterval%time.Second != 0 {
+		return 0, fmt.Errorf(
+			"parse store_interval %q: duration must contain whole seconds",
+			value,
+		)
+	}
+
+	return int(storeInterval / time.Second), nil
 }
