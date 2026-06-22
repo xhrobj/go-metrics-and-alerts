@@ -2,60 +2,38 @@ package agent
 
 import (
 	"context"
-	"crypto/rsa"
 	"fmt"
-	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/go-resty/resty/v2"
-	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"go.uber.org/zap"
 )
 
 const shutdownTimeout = time.Second * 30
 
-// AgentStorage описывает хранилище метрик, используемое Агентом.
-type AgentStorage interface {
-	UpdateGauge(context.Context, string, float64) error
-	Snapshot(context.Context) (map[string]float64, map[string]int64, error)
-}
-
-type reportTask struct {
-	metrics   []model.Metrics
-	pollCount int64
-}
-
-// Agent собирает системные и runtime-метрики и отправляет их на Сервер по HTTP.
+// Agent управляет runtime Агента: ticker'ами, очередью отправки,
+// worker'ами и graceful shutdown.
 type Agent struct {
-	repo                AgentStorage
-	baseURL             string
+	service             *ReportingService
 	pollIntervalInSec   int
 	reportIntervalInSec int
 	rateLimit           int
-	hashKey             string
-	publicKey           *rsa.PublicKey
-	client              *resty.Client
 	log                 *zap.Logger
 
 	// sendQueue используется report() для постановки задач на отправку.
 	sendQueue chan<- reportTask
 	// recvQueue используется send worker'ами для чтения задач из той же очереди.
 	recvQueue <-chan reportTask
-
-	// pollSinceReport - количество вызовов pollRuntime() с момента последней
-	// успешной отправки отчёта. Используется для формирования метрики PollCount.
-	pollSinceReport atomic.Int64
 }
 
 // New создаёт нового Агента с указанными параметрами конфигурации.
-func New(repo AgentStorage, cfg config.AgentConfig, log *zap.Logger) (*Agent, error) {
+func New(service *ReportingService, cfg config.AgentConfig, log *zap.Logger) (*Agent, error) {
 	if log == nil {
 		log = zap.NewNop()
+	}
+	if service == nil {
+		return nil, fmt.Errorf("reporting service is nil")
 	}
 
 	if cfg.PollIntervalInSec <= 0 {
@@ -68,40 +46,20 @@ func New(repo AgentStorage, cfg config.AgentConfig, log *zap.Logger) (*Agent, er
 		return nil, fmt.Errorf("rate limit must be > 0, got %d", cfg.RateLimit)
 	}
 
-	var publicKey *rsa.PublicKey
-	if cfg.CryptoKey != "" {
-		loadedPublicKey, err := encryption.LoadPublicKey(cfg.CryptoKey)
-		if err != nil {
-			return nil, fmt.Errorf("load public key: %w", err)
-		}
-
-		publicKey = loadedPublicKey
-	}
-
-	baseURL := cfg.ServerAddr
-	if !strings.Contains(baseURL, "://") {
-		baseURL = "http://" + baseURL
-	}
-
 	queue := make(chan reportTask, cfg.RateLimit)
 
 	return &Agent{
-		repo:                repo,
-		baseURL:             baseURL,
+		service:             service,
 		pollIntervalInSec:   cfg.PollIntervalInSec,
 		reportIntervalInSec: cfg.ReportIntervalInSec,
 		rateLimit:           cfg.RateLimit,
-		hashKey:             cfg.Key,
-		publicKey:           publicKey,
-		client:              resty.New(),
 		log:                 log,
 		sendQueue:           queue,
 		recvQueue:           queue,
 	}, nil
 }
 
-// Run запускает независимые горутины:
-// сбор runtime-метрик, сбор системных метрик и отправку метрик на Сервер.
+// Run запускает независимые горутины сбора и отправки метрик.
 //
 // При отмене контекста ждёт завершения активных операций и
 // отправляет финальный снимок.
@@ -158,7 +116,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		return fmt.Errorf("wait send workers: %w", err)
 	}
 
-	if err := a.flush(shutdownCtx); err != nil {
+	if err := a.service.flush(shutdownCtx); err != nil {
 		return err
 	}
 
@@ -183,23 +141,6 @@ func waitForGroup(ctx context.Context, wg *sync.WaitGroup) error {
 	}
 }
 
-func (a *Agent) flush(ctx context.Context) error {
-	pollCount := a.pollSinceReport.Swap(0)
-
-	metrics, err := a.buildMetricsBatch(ctx, pollCount)
-	if err != nil {
-		a.pollSinceReport.Add(pollCount)
-		return fmt.Errorf("build final metrics batch: %w", err)
-	}
-
-	if err := a.sendMetrics(ctx, metrics); err != nil {
-		a.pollSinceReport.Add(pollCount)
-		return fmt.Errorf("send final metrics batch: %w", err)
-	}
-
-	return nil
-}
-
 func (a *Agent) runRuntimePollLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
 	defer ticker.Stop()
@@ -209,7 +150,7 @@ func (a *Agent) runRuntimePollLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			a.pollRuntime()
+			a.service.pollRuntime()
 		}
 	}
 }
@@ -218,18 +159,14 @@ func (a *Agent) runSystemPollLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(a.pollIntervalInSec) * time.Second)
 	defer ticker.Stop()
 
-	// NOTE: Первый вызов нужен, чтобы инициализировать базу для cpu.Percent(0, true).
-	// https://pkg.go.dev/github.com/shirou/gopsutil/v4/cpu
-	if _, err := cpu.Percent(0, true); err != nil {
-		a.log.Error("init cpu percent", zap.Error(err))
-	}
+	a.service.initSystemPoll()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			a.pollSystem()
+			a.service.pollSystem()
 		}
 	}
 }
@@ -257,10 +194,7 @@ func (a *Agent) runSendWorker(ctx context.Context) {
 			if !ok {
 				return
 			}
-			if err := a.sendMetrics(ctx, task.metrics); err != nil {
-				// Пока задача отправлялась, runtime-сборщик уже мог накопить
-				// новые poll'ы, поэтому возвращаем старое значение через Add.
-				a.pollSinceReport.Add(task.pollCount)
+			if err := a.service.send(ctx, task); err != nil {
 				a.log.Error("send metrics failed",
 					zap.Int64("pollCount", task.pollCount),
 					zap.Error(err),

@@ -1,6 +1,19 @@
 # internal/agent
 
-Пакет реализует runtime Агента: сбор метрик, формирование batch-отчётов, очередь отправки, повторные попытки и graceful shutdown.
+Пакет разделяет runtime Агента, сервис метрик и транспорт отправки.
+
+```text
+Agent
+-> ReportingService
+  -> MetricsSender
+    -> HTTPSender
+    -> gRPCSender (скоро) 
+```
+
+- `Agent` управляет ticker'ами, очередью, worker'ами и graceful shutdown
+- `ReportingService` собирает метрики, хранит `PollCount`, формирует batch и восстанавливает счетчик при ошибках
+- `MetricsSender` задает транспортный порт отправки
+- `HTTPSender` реализует текущую HTTP-доставку
 
 ## Runtime-метрики
 
@@ -70,16 +83,18 @@
 
 ## Отправка
 
-Отчёт формируется из снимка всех gauge-метрик и текущей delta `PollCount`.
+Отчёт формируется из снимка всех gauge-метрик и текущей delta `PollCount`. После чего `ReportingService` передает готовый batch через `MetricsSender`.
 
 ```text
 snapshot
 -> []model.Metrics
--> JSON
--> gzip
--> optional encryption
--> optional HashSHA256
--> POST /updates
+-> MetricsSender
+   -> HTTPSender
+      -> JSON
+      -> gzip
+      -> optional encryption
+      -> optional HashSHA256
+      -> POST /updates
 ```
 
-Задачи отправки проходят через буферизированную очередь. Количество worker'ов и размер очереди определяются `RATE_LIMIT`.
+Задачи отправки проходят через буферизированную очередь, которой управляет `Agent`. Количество worker'ов и размер очереди определяются `RATE_LIMIT`.

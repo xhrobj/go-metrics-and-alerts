@@ -44,7 +44,6 @@ func main() {
 		if errors.Is(err, flag.ErrHelp) {
 			return
 		}
-
 		log.Fatal(err)
 	}
 }
@@ -60,9 +59,15 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	repo := repository.NewMemStorage()
-	a, err := agent.New(repo, cfg, lg)
+	sender, err := agent.NewHTTPSender(cfg.ServerAddr, cfg.Key, cfg.CryptoKey)
+	if err != nil {
+		return err
+	}
 
+	repo := repository.NewMemStorage()
+	service := agent.NewReportingService(repo, sender, lg)
+
+	a, err := agent.New(service, cfg, lg)
 	if err != nil {
 		return err
 	}
@@ -81,6 +86,5 @@ func printBanner(w io.Writer) error {
 
 `
 	_, err := io.WriteString(w, banner)
-
 	return err
 }

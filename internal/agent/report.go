@@ -1,55 +1,69 @@
 package agent
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"net"
-	"net/http"
-	"time"
 
-	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
 
 func (a *Agent) report() {
-	// запомним значение и обнулим
-	pollCount := a.pollSinceReport.Swap(0)
-	if pollCount == 0 {
-		return
-	}
-
-	metrics, err := a.buildMetricsBatch(context.Background(), pollCount)
-	if err != nil {
-		// метод poll() в соседней горутине мог уже подинкрементить этот счетчик,
-		// поэтому не восстановим, а добавим запомненное ранее значение обратно
-		a.pollSinceReport.Add(pollCount)
-		return
-	}
-
-	if len(metrics) == 0 {
-		a.pollSinceReport.Add(pollCount)
+	task, ok, err := a.service.preparePeriodicReport(context.Background())
+	if err != nil || !ok {
 		return
 	}
 
 	select {
-	case a.sendQueue <- reportTask{
-		metrics:   metrics,
-		pollCount: pollCount,
-	}:
+	case a.sendQueue <- task:
 	default:
-		a.pollSinceReport.Add(pollCount)
+		a.service.restore(task)
 		a.log.Warn("sendQueue is full")
 	}
 }
 
-func (a *Agent) buildMetricsBatch(ctx context.Context, pollCount int64) ([]model.Metrics, error) {
-	gauges, _, err := a.repo.Snapshot(ctx)
+func (s *ReportingService) preparePeriodicReport(ctx context.Context) (reportTask, bool, error) {
+	return s.prepareReport(ctx, true)
+}
+
+func (s *ReportingService) prepareFinalReport(ctx context.Context) (reportTask, error) {
+	task, _, err := s.prepareReport(ctx, false)
+	return task, err
+}
+
+func (s *ReportingService) prepareReport(
+	ctx context.Context,
+	skipWithoutPolls bool,
+) (reportTask, bool, error) {
+	// Запоминаем значение и обнуляем накопитель.
+	pollCount := s.pollSinceReport.Swap(0)
+	if skipWithoutPolls && pollCount == 0 {
+		return reportTask{}, false, nil
+	}
+
+	metrics, err := s.buildMetricsBatch(ctx, pollCount)
+	if err != nil {
+		// Runtime-сборщик мог уже увеличить счётчик, поэтому возвращаем
+		// старое значение через Add, а не через Store.
+		s.pollSinceReport.Add(pollCount)
+		return reportTask{}, false, err
+	}
+
+	if len(metrics) == 0 {
+		s.pollSinceReport.Add(pollCount)
+		return reportTask{}, false, nil
+	}
+
+	return reportTask{
+		metrics:   metrics,
+		pollCount: pollCount,
+	}, true, nil
+}
+
+func (s *ReportingService) buildMetricsBatch(
+	ctx context.Context,
+	pollCount int64,
+) ([]model.Metrics, error) {
+	gauges, _, err := s.repo.Snapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot metrics: %w", err)
 	}
@@ -57,7 +71,6 @@ func (a *Agent) buildMetricsBatch(ctx context.Context, pollCount int64) ([]model
 	// Snapshot сейчас не гарантирует одномоментную согласованность всех метрик:
 	// часть gauge-метрик может быть уже обновлена другой горутиной в момент
 	// формирования batch.
-
 	metrics := make([]model.Metrics, 0, len(gauges)+1)
 
 	for name, value := range gauges {
@@ -78,164 +91,30 @@ func (a *Agent) buildMetricsBatch(ctx context.Context, pollCount int64) ([]model
 	return metrics, nil
 }
 
-func (a *Agent) sendMetrics(ctx context.Context, metrics []model.Metrics) error {
-	body, err := prepareRequestBody(metrics)
-	if err != nil {
+func (s *ReportingService) send(ctx context.Context, task reportTask) error {
+	if err := s.sender.Send(ctx, task.metrics); err != nil {
+		s.restore(task)
 		return err
-	}
-
-	if a.publicKey != nil {
-		body, err = encryption.Encrypt(body, a.publicKey)
-		if err != nil {
-			return fmt.Errorf("encrypt metrics batch: %w", err)
-		}
-	}
-
-	// хеш вычисляется от тех же байтов, что будут отправлены Серверу
-	hashValue := hash.CalcHash(body, a.hashKey)
-
-	if err := a.postWithRetry(ctx, "/updates", body, hashValue); err != nil {
-		return fmt.Errorf("send metrics batch: %w", err)
 	}
 
 	return nil
 }
 
-func prepareRequestBody(metrics []model.Metrics) ([]byte, error) {
-	body, err := json.Marshal(metrics)
-	if err != nil {
-		return nil, fmt.Errorf("marshal metrics batch: %w", err)
-	}
-
-	compressedBody, err := gzipCompress(body)
-	if err != nil {
-		return nil, fmt.Errorf("gzip compress metrics batch: %w", err)
-	}
-
-	return compressedBody, nil
+func (s *ReportingService) restore(task reportTask) {
+	// Пока задача находилась в очереди или отправлялась, runtime-сборщик мог
+	// накопить новые poll'ы, поэтому возвращаем старое значение через Add.
+	s.pollSinceReport.Add(task.pollCount)
 }
 
-func gzipCompress(data []byte) ([]byte, error) {
-	var buf bytes.Buffer
-
-	zw := gzip.NewWriter(&buf)
-
-	_, err := zw.Write(data)
+func (s *ReportingService) flush(ctx context.Context) error {
+	task, err := s.prepareFinalReport(ctx)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("build final metrics batch: %w", err)
 	}
 
-	err = zw.Close()
-	if err != nil {
-		return nil, err
+	if err := s.send(ctx, task); err != nil {
+		return fmt.Errorf("send final metrics batch: %w", err)
 	}
 
-	return buf.Bytes(), nil
-}
-
-func (a *Agent) postWithRetry(
-	ctx context.Context,
-	path string,
-	body []byte,
-	hashValue string,
-) error {
-	realIP, err := localIP()
-	if err != nil {
-		return fmt.Errorf("get local IP: %w", err)
-	}
-
-	retryDelays := []time.Duration{
-		time.Second * 1,
-		time.Second * 3,
-		time.Second * 5,
-	}
-
-	var lastErr error
-
-	for attempt := 0; attempt <= len(retryDelays); attempt++ {
-		req := a.client.R().
-			SetContext(ctx).
-			SetHeader("Content-Type", "application/json").
-			SetHeader("Content-Encoding", "gzip").
-			SetHeader(protocol.HeaderRealIP, realIP).
-			SetBody(body)
-
-		if a.publicKey != nil {
-			req.SetHeader(encryption.HeaderContentEncryption, encryption.SchemeRSAOAEPWithAESGCM)
-		}
-
-		if hashValue != "" {
-			req.SetHeader("HashSHA256", hashValue)
-		}
-
-		resp, err := req.Post(a.baseURL + path)
-		if err == nil {
-			if resp.StatusCode() == http.StatusOK {
-				return nil
-			}
-
-			lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode())
-			if !isRetriableStatusCode(resp.StatusCode()) || attempt >= len(retryDelays) {
-				return lastErr
-			}
-
-			if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
-				return err
-			}
-			continue
-		}
-
-		lastErr = err
-		if !isRetriableAgentError(err) || attempt >= len(retryDelays) {
-			return lastErr
-		}
-
-		if err := waitRetry(ctx, retryDelays[attempt]); err != nil {
-			return err
-		}
-	}
-
-	return lastErr
-}
-
-func localIP() (string, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", fmt.Errorf("get interface addresses: %w", err)
-	}
-
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if !ok || ipNet.IP.IsLoopback() {
-			continue
-		}
-
-		ip := ipNet.IP.To4()
-		if ip != nil {
-			return ip.String(), nil
-		}
-	}
-
-	return "", errors.New("local IPv4 address not found")
-}
-
-func isRetriableStatusCode(statusCode int) bool {
-	return statusCode == http.StatusTooManyRequests || (statusCode >= 500 && statusCode < 600)
-}
-
-func isRetriableAgentError(err error) bool {
-	var netErr net.Error
-	return errors.As(err, &netErr)
-}
-
-func waitRetry(ctx context.Context, delay time.Duration) error {
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
+	return nil
 }

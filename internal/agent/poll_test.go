@@ -4,79 +4,52 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xhrobj/go-metrics-and-alerts/internal/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
 	"go.uber.org/zap"
 )
 
-// pollRuntime() выставляет RandomValue, добавляет runtime-метрики.
-func TestAgent_PollRuntime_UpdatesMetrics(t *testing.T) {
-	lg := zap.NewNop()
-	cfg := config.AgentConfig{
-		ServerAddr:          "example.com:8080",
-		PollIntervalInSec:   2,
-		ReportIntervalInSec: 10,
-		RateLimit:           5,
-		Key:                 "secret-key",
-	}
+// pollRuntime() выставляет RandomValue и добавляет runtime-метрики.
+func TestReportingServicePollRuntimeUpdatesMetrics(t *testing.T) {
 	repo := repository.NewMemStorage()
+	service := NewReportingService(repo, newNoopSender(), zap.NewNop())
 
-	a, err := New(repo, cfg, lg)
-	if err != nil {
-		t.Fatalf("failed to create agent: %v", err)
-	}
-
-	a.pollRuntime()
+	service.pollRuntime()
 
 	gauges, _, err := repo.Snapshot(context.Background())
 	if err != nil {
-		t.Fatalf("snapshot failed: %v", err)
+		t.Fatalf("Snapshot() error = %v, want nil", err)
 	}
 
-	// RandomValue должен существовать
 	if _, ok := gauges["RandomValue"]; !ok {
-		t.Fatalf("expected RandomValue gauge to be set")
+		t.Fatal("RandomValue not found")
 	}
-
-	// хотя бы одна runtime-метрика
 	if _, ok := gauges["Alloc"]; !ok {
-		t.Fatalf("expected runtime metric Alloc to be set")
+		t.Fatal("Alloc not found")
+	}
+	if got, want := service.pollSinceReport.Load(), int64(1); got != want {
+		t.Fatalf("pollSinceReport = %d, want %d", got, want)
 	}
 }
 
 // pollSystem() сохраняет в хранилище системные метрики.
-func TestAgent_PollSystem_StoresSystemMetrics(t *testing.T) {
-	lg := zap.NewNop()
-	cfg := config.AgentConfig{
-		ServerAddr:          "example.com:8080",
-		PollIntervalInSec:   2,
-		ReportIntervalInSec: 10,
-		RateLimit:           5,
-		Key:                 "",
-	}
+func TestReportingServicePollSystemStoresSystemMetrics(t *testing.T) {
 	repo := repository.NewMemStorage()
+	service := NewReportingService(repo, newNoopSender(), zap.NewNop())
 
-	a, err := New(repo, cfg, lg)
-	if err != nil {
-		t.Fatalf("failed to create agent: %v", err)
-	}
-
-	a.pollSystem()
+	service.pollSystem()
 
 	gauges, _, err := repo.Snapshot(context.Background())
 	if err != nil {
-		t.Fatalf("snapshot failed: %v", err)
+		t.Fatalf("Snapshot() error = %v, want nil", err)
 	}
 
 	if _, ok := gauges["TotalMemory"]; !ok {
-		t.Fatalf("expected TotalMemory metric to be present")
+		t.Fatal("TotalMemory not found")
 	}
-
 	if _, ok := gauges["FreeMemory"]; !ok {
-		t.Fatalf("expected FreeMemory metric to be present")
+		t.Fatal("FreeMemory not found")
 	}
-
 	if _, ok := gauges["CPUutilization1"]; !ok {
-		t.Fatalf("expected CPUutilization1 metric to be present")
+		t.Fatal("CPUutilization1 not found")
 	}
 }
