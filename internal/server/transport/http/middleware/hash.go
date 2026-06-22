@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
 
 // hashResponseWriter буферизует HTTP-ответ для последующего вычисления хеша
@@ -74,7 +75,7 @@ func WithHash(hashKey string) func(http.Handler) http.Handler {
 					return
 				}
 
-				expectedHash := r.Header.Get("HashSHA256")
+				expectedHash := r.Header.Get(protocol.HeaderHashSHA256)
 
 				if expectedHash != "" {
 					actualHash := hash.CalcHash(body, hashKey)
@@ -95,7 +96,7 @@ func WithHash(hashKey string) func(http.Handler) http.Handler {
 			responseBody := hw.body.Bytes()
 			responseHash := hash.CalcHash(responseBody, hashKey)
 			if responseHash != "" {
-				hw.header.Set("HashSHA256", responseHash)
+				hw.header.Set(protocol.HeaderHashSHA256, responseHash)
 			}
 
 			// копируем заголовки

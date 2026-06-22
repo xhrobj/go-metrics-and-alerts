@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
 
 // Value возвращает текущее значение метрики в текстовом виде.
@@ -46,7 +47,7 @@ func (h *Handler) Value(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// success
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set(protocol.HeaderContentType, protocol.ContentTypeTextPlainUTF8)
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(out)); err != nil {
 		return
@@ -136,7 +137,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	out.WriteString("</ul></body></html>")
 
 	// success
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(protocol.HeaderContentType, protocol.ContentTypeHTMLUTF8)
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(out.String())); err != nil {
 		return

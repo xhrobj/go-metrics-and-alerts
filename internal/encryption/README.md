@@ -13,6 +13,8 @@
 
 Сервер выполняет обратные операции приватным RSA-ключом.
 
+Имя транспортного заголовка `Content-Encryption` объявлено в [`internal/protocol`](../protocol/README.md), а значение схемы `rsa-aes-gcm` остаётся в пакете `internal/encryption`.
+
 ## Ключи для тестов
 
 Пакет `internal/encryption/testkeys` при каждом тесте:

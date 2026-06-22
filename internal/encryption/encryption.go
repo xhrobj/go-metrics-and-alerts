@@ -15,14 +15,9 @@ import (
 // поэтому используется гибридная схема:
 // данные шифруются AES-GCM, а AES-ключ - RSA-OAEP.
 
-const (
-	// HeaderContentEncryption задаёт имя заголовка со схемой шифрования тела запроса.
-	HeaderContentEncryption = "Content-Encryption"
-
-	// SchemeRSAOAEPWithAESGCM обозначает гибридную схему:
-	// данные шифруются AES-GCM, а сам AES-ключ - RSA-OAEP.
-	SchemeRSAOAEPWithAESGCM = "rsa-aes-gcm"
-)
+// SchemeRSAOAEPWithAESGCM обозначает гибридную схему:
+// данные шифруются AES-GCM, а сам AES-ключ - RSA-OAEP.
+const SchemeRSAOAEPWithAESGCM = "rsa-aes-gcm"
 
 type envelope struct {
 	Key   []byte `json:"key"`   // AES-ключ, зашифрованный публичным RSA-ключом

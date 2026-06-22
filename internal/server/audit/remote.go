@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
 
 const defaultAuditTimeout = time.Second * 5
@@ -51,7 +53,7 @@ func (o *RemoteObserver) Notify(ctx context.Context, event Event) error {
 		return fmt.Errorf("create audit request: %w", err)
 	}
 
-	rq.Header.Set("Content-Type", "application/json")
+	rq.Header.Set(protocol.HeaderContentType, protocol.ContentTypeJSON)
 
 	rs, err := o.client.Do(rq)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
 
 // Update принимает метрику на хранение.
@@ -23,8 +24,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// invalid Content-Type
-	ct := r.Header.Get("Content-Type")
-	if ct != "" && !strings.HasPrefix(strings.ToLower(ct), "text/plain") {
+	ct := r.Header.Get(protocol.HeaderContentType)
+	if ct != "" && !strings.HasPrefix(strings.ToLower(ct), protocol.ContentTypeTextPlain) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -73,7 +74,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	h.notifyAuditMetric(r, metricName)
 
 	// success
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set(protocol.HeaderContentType, protocol.ContentTypeTextPlainUTF8)
 	w.WriteHeader(http.StatusOK)
 }
 

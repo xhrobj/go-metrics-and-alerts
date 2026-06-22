@@ -36,3 +36,7 @@ internal/
 ## Сервер
 
 Подробнее: [`internal/server`](server/README.md).
+
+## Транспортные константы
+
+Подробнее: [`internal/protocol`](protocol/README.md).

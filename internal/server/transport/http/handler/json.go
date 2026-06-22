@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
 
 func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) bool {
@@ -16,8 +17,8 @@ func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) bool {
 	}
 
 	// invalid Content-Type
-	ct := r.Header.Get("Content-Type")
-	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), "application/json") {
+	ct := r.Header.Get(protocol.HeaderContentType)
+	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), protocol.ContentTypeJSON) {
 		w.WriteHeader(http.StatusBadRequest)
 		return false
 	}
@@ -56,7 +57,7 @@ func validateMetric(metric model.Metrics) int {
 }
 
 func writeMetricJSON(w http.ResponseWriter, status int, metric model.Metrics) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(protocol.HeaderContentType, protocol.ContentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(metric)
 }

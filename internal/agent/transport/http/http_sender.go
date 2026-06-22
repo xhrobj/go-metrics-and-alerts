@@ -134,17 +134,17 @@ func (s *HTTPSender) postWithRetry(
 	for attempt := 0; attempt <= len(retryDelays); attempt++ {
 		rq := s.client.R().
 			SetContext(ctx).
-			SetHeader("Content-Type", "application/json").
-			SetHeader("Content-Encoding", "gzip").
+			SetHeader(protocol.HeaderContentType, protocol.ContentTypeJSON).
+			SetHeader(protocol.HeaderContentEncoding, protocol.EncodingGzip).
 			SetHeader(protocol.HeaderRealIP, realIP).
 			SetBody(body)
 
 		if s.publicKey != nil {
-			rq.SetHeader(encryption.HeaderContentEncryption, encryption.SchemeRSAOAEPWithAESGCM)
+			rq.SetHeader(protocol.HeaderContentEncryption, encryption.SchemeRSAOAEPWithAESGCM)
 		}
 
 		if hashValue != "" {
-			rq.SetHeader("HashSHA256", hashValue)
+			rq.SetHeader(protocol.HeaderHashSHA256, hashValue)
 		}
 
 		rs, err := rq.Post(s.baseURL + path)

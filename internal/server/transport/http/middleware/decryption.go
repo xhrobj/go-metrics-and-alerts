@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
 
 // WithDecryption расшифровывает тело HTTP-запроса приватным RSA-ключом.
@@ -16,7 +17,7 @@ import (
 func WithDecryption(privateKey *rsa.PrivateKey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			scheme := r.Header.Get(encryption.HeaderContentEncryption)
+			scheme := r.Header.Get(protocol.HeaderContentEncryption)
 			if scheme == "" {
 				next.ServeHTTP(w, r)
 				return
@@ -57,7 +58,7 @@ func decryptRequestBody(r *http.Request, privateKey *rsa.PrivateKey) error {
 
 	r.Body = io.NopCloser(bytes.NewReader(decryptedBody))
 	r.ContentLength = int64(len(decryptedBody))
-	r.Header.Del(encryption.HeaderContentEncryption)
+	r.Header.Del(protocol.HeaderContentEncryption)
 
 	return nil
 }

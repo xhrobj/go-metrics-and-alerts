@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
 
 // compressWriter — обёртка над http.ResponseWriter, которая при необходимости
@@ -119,8 +121,8 @@ func WithGzip(h http.Handler) http.Handler {
 		ow := w
 
 		// проверяем, поддерживает ли клиент gzip-ответы.
-		acceptEncoding := r.Header.Get("Accept-Encoding")
-		supportsGzip := strings.Contains(strings.ToLower(acceptEncoding), "gzip")
+		acceptEncoding := r.Header.Get(protocol.HeaderAcceptEncoding)
+		supportsGzip := strings.Contains(strings.ToLower(acceptEncoding), protocol.EncodingGzip)
 
 		if supportsGzip {
 			cw := newCompressWriter(w)
@@ -134,8 +136,8 @@ func WithGzip(h http.Handler) http.Handler {
 		}
 
 		// проверяем, прислал ли клиент сжатое тело запроса
-		contentEncoding := r.Header.Get("Content-Encoding")
-		sendsGzip := strings.Contains(strings.ToLower(contentEncoding), "gzip")
+		contentEncoding := r.Header.Get(protocol.HeaderContentEncoding)
+		sendsGzip := strings.Contains(strings.ToLower(contentEncoding), protocol.EncodingGzip)
 
 		if sendsGzip {
 			cr, err := newCompressReader(r.Body)
@@ -166,11 +168,11 @@ func (c *compressWriter) initWriter() {
 		return
 	}
 
-	contentType := strings.ToLower(c.Header().Get("Content-Type"))
+	contentType := strings.ToLower(c.Header().Get(protocol.HeaderContentType))
 
-	if strings.HasPrefix(contentType, "application/json") ||
-		strings.HasPrefix(contentType, "text/html") {
-		c.Header().Set("Content-Encoding", "gzip")
+	if strings.HasPrefix(contentType, protocol.ContentTypeJSON) ||
+		strings.HasPrefix(contentType, protocol.ContentTypeHTML) {
+		c.Header().Set(protocol.HeaderContentEncoding, protocol.EncodingGzip)
 		c.zw = gzip.NewWriter(c.w)
 		c.writer = c.zw
 		return

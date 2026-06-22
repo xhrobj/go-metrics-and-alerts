@@ -12,6 +12,7 @@ import (
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption/testkeys"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 )
 
 type trackingReadCloser struct {
@@ -60,10 +61,10 @@ func TestWithDecryptionDecryptsBody(t *testing.T) {
 
 		got = body
 
-		if value := r.Header.Get(encryption.HeaderContentEncryption); value != "" {
+		if value := r.Header.Get(protocol.HeaderContentEncryption); value != "" {
 			t.Fatalf(
 				"%s = %q, want empty",
-				encryption.HeaderContentEncryption,
+				protocol.HeaderContentEncryption,
 				value,
 			)
 		}
@@ -83,7 +84,7 @@ func TestWithDecryptionDecryptsBody(t *testing.T) {
 	rq.Body = originalBody
 	rq.ContentLength = int64(len(encryptedBody))
 	rq.Header.Set(
-		encryption.HeaderContentEncryption,
+		protocol.HeaderContentEncryption,
 		encryption.SchemeRSAOAEPWithAESGCM,
 	)
 	rq.Header.Set("Content-Encoding", "gzip")
@@ -208,7 +209,7 @@ func TestWithDecryptionRejectsInvalidRequests(t *testing.T) {
 
 			rq := httptest.NewRequest(http.MethodPost, "/updates", nil)
 			rq.Body = tt.body()
-			rq.Header.Set(encryption.HeaderContentEncryption, tt.scheme)
+			rq.Header.Set(protocol.HeaderContentEncryption, tt.scheme)
 
 			rs := httptest.NewRecorder()
 
@@ -252,7 +253,7 @@ func TestWithDecryptionRejectsWrongPrivateKey(t *testing.T) {
 
 	rq := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewReader(encryptedBody))
 	rq.Header.Set(
-		encryption.HeaderContentEncryption,
+		protocol.HeaderContentEncryption,
 		encryption.SchemeRSAOAEPWithAESGCM,
 	)
 
