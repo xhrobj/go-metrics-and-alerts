@@ -3,9 +3,11 @@
 В директории `cmd/` находятся точки входа CLI-приложений проекта:
 
 - `agent` - собирает системные и runtime-метрики и отправляет их на Сервер
-- `server` - принимает, хранит и отдаёт метрики
+- `server` - запускает Сервер, который принимает, хранит и отдаёт метрики
 - `staticlint` - запускает собственный набор статических анализаторов проекта
 - `reset` - генерирует методы `Reset()` для структур с комментарием `// generate:reset`
+
+Точки входа остаются тонкими: они читают конфигурацию, создают зависимости и передают управление внутренним пакетам `internal/agent` и `internal/server`.
 
 ## Структура
 
@@ -19,11 +21,34 @@ cmd/
 
 ## Взаимодействие Агента и Сервера
 
-Агент периодически собирает системные и runtime-метрики, формирует batch-отчёты и отправляет их на Сервер через очередь задач и worker pool.
+Агент периодически собирает системные и runtime-метрики, формирует batch-отчёты и отправляет их через выбранный транспорт.
 
 ```text
-agent -> queue/worker pool -> HTTP -> server -> service -> repository
+cmd/agent
+-> agent.Agent
+-> agent/service.ReportingService
+-> agent/service.MetricsSender
+-> agent/transport/http.HTTPSender
+-> HTTP
 ```
+
+На стороне Сервера HTTP-запрос проходит через transport-слой к общему сервису метрик и repository:
+
+```text
+HTTP
+-> server/transport/http/router
+-> server/transport/http/middleware
+-> server/transport/http/handler
+-> server/service.MetricsService
+-> repository
+```
+
+Пакет `internal/server` создает эти зависимости, управляет HTTP lifecycle, persistence, аудитом и соединением с БД.
+
+Подробности:
+
+- [архитектура Агента](../internal/agent/README.md)
+- [архитектура Сервера](../internal/server/README.md)
 
 Сервер использует одно из runtime-хранилищ:
 
@@ -129,6 +154,7 @@ make staticlint
 ### Генерация кода
 
 ```bash
+make generate-mocks
 make generate-reset
 make clean-generated
 ```

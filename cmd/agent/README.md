@@ -1,8 +1,15 @@
 # cmd/agent
 
-В директории находится точка входа Агента - приложения, которое периодически собирает системные и runtime-метрики, сохраняет текущие значения в локальное хранилище и отправляет batch-отчёты на Сервер.
+В директории находится тонкая точка входа Агента. Она читает конфигурацию, создаёт локальное repository, HTTP-отправитель и reporting service, после чего передаёт управление `internal/agent.Agent`.
 
-Общая архитектура проекта, build info и команды Makefile описаны в [`cmd/README.md`](../README.md). Полный список метрик находится в [`internal/agent`](../../internal/agent/README.md).
+Общая архитектура проекта, build info и команды Makefile описаны в [`cmd/README.md`](../README.md). Архитектура Агента и полный список метрик находятся в [`internal/agent`](../../internal/agent/README.md).
+
+```text
+cmd/agent
+├── agent.Agent
+├── agent/service.ReportingService
+└── agent/transport/http.HTTPSender
+```
 
 ## Поведение Агента
 
