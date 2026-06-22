@@ -22,12 +22,13 @@ NNN_description.down.sql
 
 Используется библиотека `golang-migrate`.
 
-Если задан `DATABASE_DSN`, Сервер при старте:
+Если задан `DATABASE_DSN`, application root [`internal/server`](../internal/server/README.md) при старте:
 
 1. открывает соединение с PostgreSQL
 2. проверяет доступность БД
-3. выполняет все доступные `up`-миграции
-4. продолжает запуск приложения
+3. вызывает runner из `internal/server/migrations`
+4. выполняет все доступные `up`-миграции
+5. продолжает запуск приложения
 
 `migrate.ErrNoChange` означает, что схема уже актуальна, и не считается ошибкой.
 

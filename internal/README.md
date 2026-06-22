@@ -6,33 +6,30 @@
 
 ```text
 internal/
-├── agent/       # сбор, формирование и отправка метрик
-├── audit/       # события аудита и observers
-├── buildinfo/   # вывод версии, даты и Git-коммита сборки
-├── config/      # загрузка и валидация конфигурации
-├── encryption/  # RSA-ключи и гибридное шифрование
-├── handler/     # HTTP-обработчики
-├── hash/        # вычисление HashSHA256
-├── logger/      # инициализация zap
-├── middleware/  # HTTP middleware
-├── migrations/  # запуск SQL-миграций
-├── model/       # транспортная модель метрики
-├── protocol/    # общие элементы транспортного протокола
-├── repository/  # хранилища метрик
-├── router/      # маршруты и middleware-цепочка
-└── service/     # бизнес-логика метрик
+├── agent/          # runtime, сервис и transport Агента
+├── buildinfo/      # вывод версии, даты и Git-коммита сборки
+├── config/         # загрузка и валидация конфигурации
+├── encryption/     # RSA-ключи и гибридное шифрование
+├── hash/           # вычисление HashSHA256
+├── logger/         # инициализация zap
+├── model/          # общая модель метрики
+├── protocol/       # общие транспортные константы
+├── repository/     # хранилища метрик
+└── server/         # приложение Сервера и его внутренние пакеты
+    ├── audit/      # события аудита и observers
+    ├── migrations/ # запуск SQL-миграций
+    ├── service/    # бизнес-логика метрик
+    └── transport/
+        └── http/
+            ├── handler/    # HTTP-обработчики
+            ├── middleware/ # HTTP middleware
+            └── router/     # маршруты и middleware-цепочка
 ```
 
-Пакеты разделены по ответственности:
+## Агент
 
-```text
-HTTP -> router/middleware -> handler -> service -> repository
-```
+Подробнее: [`internal/agent`](agent/README.md).
 
-Агент использует собственную runtime-цепочку:
+## Сервер
 
-```text
-poll loops -> local storage -> report queue -> HTTP
-```
-
-Подробности находятся в README отдельных пакетов.
+Подробнее: [`internal/server`](server/README.md).

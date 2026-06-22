@@ -13,8 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
 	"go.uber.org/mock/gomock"
 )
 

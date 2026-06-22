@@ -7,7 +7,7 @@ import (
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/service"
 )
 
 type saverFunc func(context.Context, repository.Snapshotter) error

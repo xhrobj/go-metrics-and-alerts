@@ -66,7 +66,7 @@ generate-reset:
 
 # сгенерировать моки пакета handler
 generate-mocks:
-	go generate ./internal/handler
+	go generate ./internal/server/transport/http/handler
 
 # создать (при необходимости) локальную RSA-пару
 crypto-keys:

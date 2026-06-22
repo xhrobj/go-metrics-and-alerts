@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
-	appmiddleware "github.com/xhrobj/go-metrics-and-alerts/internal/middleware"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
+	appmiddleware "github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/middleware"
 	"go.uber.org/zap"
 )
 

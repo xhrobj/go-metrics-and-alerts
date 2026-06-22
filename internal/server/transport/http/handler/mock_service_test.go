@@ -3,7 +3,7 @@ package handler_test
 import (
 	"testing"
 
-	handlermocks "github.com/xhrobj/go-metrics-and-alerts/internal/handler/mocks"
+	handlermocks "github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler/mocks"
 	"go.uber.org/mock/gomock"
 )
 

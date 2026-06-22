@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/service"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
 )
 
 func BenchmarkHandler_UpdateJSON(b *testing.B) {

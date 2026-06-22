@@ -9,10 +9,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
-	handlermocks "github.com/xhrobj/go-metrics-and-alerts/internal/handler/mocks"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
+	handlermocks "github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler/mocks"
 	"go.uber.org/mock/gomock"
 )
 

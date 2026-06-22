@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/xhrobj/go-metrics-and-alerts/internal/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/audit"
 	"go.uber.org/zap"
 )
 

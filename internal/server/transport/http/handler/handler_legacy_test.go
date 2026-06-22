@@ -17,9 +17,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
-	handlermocks "github.com/xhrobj/go-metrics-and-alerts/internal/handler/mocks"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
+	handlermocks "github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler/mocks"
 	"go.uber.org/mock/gomock"
 )
 

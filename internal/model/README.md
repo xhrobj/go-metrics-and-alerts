@@ -1,6 +1,8 @@
 # internal/model
 
-Пакет содержит транспортную модель метрики, используемую HTTP API, Агентом, handler'ами, service и repository.
+Пакет содержит общую модель метрики, которую используют Агент, сервисы, repository и текущий HTTP-транспорт.
+
+Transport-specific типы должны преобразовываться в `model.Metrics` на границе транспортного слоя.
 
 ## Типы метрик
 
@@ -11,11 +13,11 @@
 
 ```go
 type Metrics struct {
-	ID    string   `json:"id"`
-	MType string   `json:"type"`
-	Delta *int64   `json:"delta,omitempty"`
-	Value *float64 `json:"value,omitempty"`
-	Hash  string   `json:"hash,omitempty"`
+  ID    string   `json:"id"`
+  MType string   `json:"type"`
+  Delta *int64   `json:"delta,omitempty"`
+  Value *float64 `json:"value,omitempty"`
+  Hash  string   `json:"hash,omitempty"`
 }
 ```
 
@@ -25,7 +27,7 @@ type Metrics struct {
 - `MType` - `gauge` или `counter`
 - `Delta` - значение counter
 - `Value` - значение gauge
-- `Hash` - поле транспортной модели, которое в текущей реализации не используется; подпись всего HTTP-тела передаётся через заголовок `HashSHA256`
+- `Hash` - legacy-поле JSON-модели, которое в текущей реализации не используется; подпись всего HTTP-тела передаётся через заголовок `HashSHA256`
 
 `Delta` и `Value` являются указателями, чтобы различать:
 

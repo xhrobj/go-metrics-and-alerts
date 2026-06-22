@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/xhrobj/go-metrics-and-alerts/internal/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/router"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/service"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/service"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/router"
 )
 
 func TestGzipMiddleware(t *testing.T) {
