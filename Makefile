@@ -1,6 +1,6 @@
 .PHONY: \
 	show-coverage \
-	generate-reset generate-mocks \
+	generate-reset generate-mocks generate-proto \
 	crypto-keys \
 	build build-server build-agent \
 	clean-generated clean \
@@ -57,6 +57,10 @@ CONFIGS_DIR := configs
 SERVER_CONFIG := $(CONFIGS_DIR)/server.example.json
 AGENT_CONFIG := $(CONFIGS_DIR)/agent.example.json
 
+# параметры генерации protobuf-кода
+GO_MODULE := github.com/xhrobj/go-metrics-and-alerts
+PROTO_FILE := api/metrics.proto
+
 show-coverage: test-coverage
 	go tool cover -func=coverage.out | tail -n 1
 
@@ -67,6 +71,17 @@ generate-reset:
 # сгенерировать моки пакета handler
 generate-mocks:
 	go generate ./internal/server/transport/http/handler
+
+# сгенерировать Go-код protobuf-сообщений и gRPC-сервиса
+generate-proto:
+	protoc \
+		--proto_path=. \
+		--go_out=. \
+		--go_opt=module=$(GO_MODULE) \
+		--go_opt=default_api_level=API_OPAQUE \
+		--go-grpc_out=. \
+		--go-grpc_opt=module=$(GO_MODULE) \
+		$(PROTO_FILE)
 
 # создать (при необходимости) локальную RSA-пару
 crypto-keys:
@@ -93,11 +108,12 @@ build-agent:
 		-o $(AGENT) \
 		./cmd/agent
 
-# удалить сгенерированные reset.gen.go, кроме фикстур
+# удалить сгенерированный Go-код, кроме тестовых фикстур reset и тестовых моков
 clean-generated:
 	find . -name 'reset.gen.go' ! -path './cmd/reset/testdata/*' -exec rm -f {} +
+	rm -f internal/proto/*.pb.go
 
-# очистить артефакты сборки, coverage, тестовые бинарники и сгенерированные reset.gen.go
+# очистить артефакты сборки, coverage, тестовые бинарники и сгенерированный Go-код
 clean: clean-generated
 	rm -f $(SERVER) $(AGENT) coverage.out
 	find . -name "*.test" -delete

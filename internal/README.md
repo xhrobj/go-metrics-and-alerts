@@ -15,6 +15,7 @@ internal/
 ├── hash/           # вычисление HashSHA256
 ├── logger/         # инициализация zap
 ├── model/          # общая модель метрики
+├── proto/          # сгенерированные protobuf-типы и интерфейсы gRPC
 ├── protocol/       # общие транспортные константы
 ├── repository/     # хранилища метрик
 └── server/         # приложение Сервера и его внутренние пакеты
@@ -36,6 +37,10 @@ internal/
 ## Сервер
 
 Подробнее: [`internal/server`](server/README.md).
+
+## Protobuf
+
+Пакет `internal/proto` содержит сгенерированные на основе [`api/metrics.proto`](../api/metrics.proto) Go-типы сообщений и интерфейсы gRPC-клиента и gRPC-Сервера.
 
 ## Транспортные константы
 

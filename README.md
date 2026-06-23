@@ -4,7 +4,9 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_go-metrics-and-alerts&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xhrobj_go-metrics-and-alerts)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=xhrobj_go-metrics-and-alerts&metric=coverage)](https://sonarcloud.io/summary/new_code?id=xhrobj_go-metrics-and-alerts)
 
-Этот README сохраняет исходные формулировки заданий и историю развития проекта по спринтам и инкрементам. Актуальное описание текущей реализации и способов запуска находится в документации CLI-приложений:
+Этот README сохраняет исходные формулировки заданий и историю развития основного сквозного проекта курса [«Продвинутый Go-разработчик»](https://practicum.yandex.ru/go-advanced/) от Яндекс Практикума. Работа над ним велась в течение 8 спринтов: с 1-го по 4-й и с 6-го по 9-й. За это время проект прошел 28 инкрементов. Помимо него, в рамках курса были выполнены два итоговых проекта: [Gophermart](https://github.com/xhrobj/gophermart) в спринте 5 и [GophKeeper](https://github.com/xhrobj/gopherkeeper) в спринте 10.
+
+Ниже сохранена хронология развития проекта **«Сервис сбора метрик и алертинга»** по спринтам и инкрементам. Актуальное описание текущей реализации и способов запуска находится в документации CLI-приложений:
 
 - [Обзор приложений и команд](cmd/README.md)
 
@@ -1216,5 +1218,11 @@ service Metrics {
 
 - #80. Выделение сервисного слоя в Агенте
 - #81. Отделение Аудита от HTTP-транспорта на Сервере
+- #82. Добавление protobuf-контракта и генерации gRPC-кода
+- #83. gRPC service + interceptor + audit
+- #84. server config + dual lifecycle
+- #85. gRPC sender
+- #86. agent config + wiring
+- #87. integration + docs + final CI
 
 ---
