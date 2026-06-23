@@ -19,7 +19,7 @@ internal/server/
 ├── server.go       # создание, запуск и graceful shutdown Сервера
 ├── database.go     # подключение PostgreSQL, миграции и выбор repository
 ├── persistence.go  # восстановление и файловое сохранение метрик
-├── audit_setup.go  # подключение observers аудита
+├── audit_setup.go  # создание общего диспетчера и подключение observers аудита
 ├── security.go     # загрузка ключа и trusted subnet
 ├── config/         # загрузка и валидация конфигурации Сервера
 ├── audit/          # события аудита и observers

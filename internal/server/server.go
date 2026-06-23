@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/service"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
@@ -31,6 +32,7 @@ type Server struct {
 	shutdownPersistence func() error
 	persistenceOnce     sync.Once
 	persistenceErr      error
+	auditor             *audit.Auditor
 	cleanupAudit        func()
 	closeOnce           sync.Once
 }
@@ -77,11 +79,14 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 	repo, memRepo := newMetricsStorage(srv.db)
 	metricsService := service.NewMetricsService(repo)
 
-	h := handler.New(metricsService, srv.db)
-
-	srv.cleanupAudit, err = setupAudit(cfg, h, log)
+	srv.auditor, srv.cleanupAudit, err = setupAudit(cfg, log)
 	if err != nil {
 		return nil, err
+	}
+
+	h := handler.New(metricsService, srv.db)
+	if srv.auditor != nil {
+		h.EnableAudit(srv.auditor, log)
 	}
 
 	httpHandler := router.New(h, log, router.Options{

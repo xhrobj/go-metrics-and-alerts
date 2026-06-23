@@ -3,30 +3,28 @@ package server
 import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/config"
-	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
 	"go.uber.org/zap"
 )
 
 func setupAudit(
 	cfg config.ServerConfig,
-	h *handler.Handler,
 	log *zap.Logger,
-) (func(), error) {
+) (*audit.Auditor, func(), error) {
 	noop := func() {
-		// Освобождать ресурсы не требуется.
+		// 4Sonar: Аудит может быть отключен, освобождать ресурсы не требуется
 	}
 
 	if cfg.AuditFile == "" && cfg.AuditURL == "" {
-		return noop, nil
+		return nil, noop, nil
 	}
 
 	cleanup := noop
-	auditDispatcher := audit.NewAuditor()
+	auditor := audit.NewAuditor()
 
 	if cfg.AuditFile != "" {
 		fileObserver, err := audit.NewFileObserver(cfg.AuditFile)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		cleanup = func() {
@@ -35,14 +33,12 @@ func setupAudit(
 			}
 		}
 
-		auditDispatcher.Subscribe(fileObserver)
+		auditor.Subscribe(fileObserver)
 	}
 
 	if cfg.AuditURL != "" {
-		auditDispatcher.Subscribe(audit.NewRemoteObserver(cfg.AuditURL))
+		auditor.Subscribe(audit.NewRemoteObserver(cfg.AuditURL))
 	}
 
-	h.EnableAudit(auditDispatcher, log)
-
-	return cleanup, nil
+	return auditor, cleanup, nil
 }
