@@ -7,8 +7,11 @@ import (
 
 // AgentConfig содержит параметры конфигурации Агента.
 type AgentConfig struct {
-	// ServerAddr - адрес и порт HTTP-сервера сбора метрик.
+	// ServerAddr - адрес и порт Сервера для выбранного транспорта.
 	ServerAddr string
+
+	// Transport - транспорт отправки метрик: grpc или http.
+	Transport Transport
 
 	// PollIntervalInSec - интервал опроса runtime-метрик в секундах.
 	PollIntervalInSec int
@@ -19,20 +22,20 @@ type AgentConfig struct {
 	// RateLimit - максимальное количество одновременно исходящих запросов от Агента к Серверу.
 	RateLimit int
 
-	// Key - "секретный" ключ для вычисления и проверки подписи HTTP-запросов/ответов.
-	// Если не задан, подпись не используется.
+	// Key - "секретный" ключ для подписи HTTP-запросов.
+	// В gRPC-режиме не используется.
 	Key string
 
-	// CryptoKey - путь к файлу публичного ключа для шифрования запросов.
-	// Если не задан, шифрование не используется.
+	// CryptoKey - путь к публичному RSA-ключу для шифрования HTTP-запросов.
+	// В gRPC-режиме не используется.
 	CryptoKey string
 }
 
 // GetAgentConfig возвращает конфигурацию Агента.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -p -r -l -k --crypto-key -c/--config
-//   - переменные окружения: ADDRESS, POLL_INTERVAL, REPORT_INTERVAL, RATE_LIMIT, KEY, CRYPTO_KEY, CONFIG
+//   - флаги: -a --transport -p -r -l -k --crypto-key -c/--config
+//   - переменные окружения: ADDRESS, TRANSPORT, POLL_INTERVAL, REPORT_INTERVAL, RATE_LIMIT, KEY, CRYPTO_KEY, CONFIG
 //   - JSON-файл конфигурации
 //
 // Приоритет источников: env > flag > json > default.
@@ -45,7 +48,9 @@ func parseAgentConfig(args []string, lookupEnv lookupEnvFunc) (AgentConfig, erro
 	flagCfg := cfg
 	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
 
-	flags.StringVar(&flagCfg.ServerAddr, "a", flagCfg.ServerAddr, "address of the HTTP server (host:port)")
+	flags.StringVar(&flagCfg.ServerAddr, "a", flagCfg.ServerAddr, "address of the Server for selected transport (host:port)")
+	transport := string(flagCfg.Transport)
+	flags.StringVar(&transport, "transport", transport, "metrics transport: grpc or http")
 	flags.IntVar(&flagCfg.PollIntervalInSec, "p", flagCfg.PollIntervalInSec, "runtime metrics polling interval in seconds")
 	flags.IntVar(&flagCfg.ReportIntervalInSec, "r", flagCfg.ReportIntervalInSec, "metrics reporting interval in seconds")
 	flags.IntVar(&flagCfg.RateLimit, "l", flagCfg.RateLimit, "limit of simultaneous outgoing requests")
@@ -59,6 +64,8 @@ func parseAgentConfig(args []string, lookupEnv lookupEnvFunc) (AgentConfig, erro
 	if err := flags.Parse(args); err != nil {
 		return cfg, err
 	}
+
+	flagCfg.Transport = Transport(transport)
 
 	setFlags := make(map[string]bool)
 	flags.Visit(func(f *flag.Flag) {
@@ -90,7 +97,8 @@ func parseAgentConfig(args []string, lookupEnv lookupEnvFunc) (AgentConfig, erro
 
 func defaultAgentConfig() AgentConfig {
 	return AgentConfig{
-		ServerAddr:          "localhost:8080",
+		ServerAddr:          "localhost:50051",
+		Transport:           TransportGRPC,
 		PollIntervalInSec:   2,
 		ReportIntervalInSec: 10,
 		RateLimit:           5,
@@ -100,6 +108,10 @@ func defaultAgentConfig() AgentConfig {
 func applyAgentFlags(cfg *AgentConfig, flagCfg AgentConfig, setFlags map[string]bool) {
 	if setFlags["a"] {
 		cfg.ServerAddr = flagCfg.ServerAddr
+	}
+
+	if setFlags["transport"] {
+		cfg.Transport = flagCfg.Transport
 	}
 
 	if setFlags["p"] {
@@ -126,6 +138,10 @@ func applyAgentFlags(cfg *AgentConfig, flagCfg AgentConfig, setFlags map[string]
 func applyAgentEnvironment(cfg *AgentConfig, lookupEnv lookupEnvFunc) error {
 	if serverAddr, ok := lookupEnv("ADDRESS"); ok {
 		cfg.ServerAddr = serverAddr
+	}
+
+	if transport, ok := lookupEnv("TRANSPORT"); ok {
+		cfg.Transport = Transport(transport)
 	}
 
 	if pollIntervalInSec, ok, err := getEnvInt(lookupEnv, "POLL_INTERVAL"); err != nil {

@@ -57,7 +57,8 @@ services:
         BUILD_DATE: ${BUILD_DATE:-N/A}
         BUILD_COMMIT: ${BUILD_COMMIT:-N/A}
     environment:
-      ADDRESS: server:8080
+      ADDRESS: ${AGENT_ADDRESS:-server:50051}
+      TRANSPORT: ${AGENT_TRANSPORT:-grpc}
       POLL_INTERVAL: 2
       REPORT_INTERVAL: 5
       RATE_LIMIT: ${RATE_LIMIT:-3}

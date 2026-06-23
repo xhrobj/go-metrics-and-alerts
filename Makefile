@@ -23,11 +23,17 @@ POSTGRES_PORT ?= 5432
 POSTGRES_DB ?= metricsdb
 POSTGRES_DSN=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
 
-# адреса HTTP- и gRPC-Сервера для локального запуска
+# HTTP/gRPC-адреса Сервера для локального запуска
 SERVER_HTTP_ADDRESS ?= localhost:8080
 SERVER_HTTP_ADDRESS_ENV ?= localhost:8088
 SERVER_GRPC_ADDRESS ?= localhost:50051
 SERVER_GRPC_ADDRESS_ENV ?= localhost:50058
+
+# транспорт и адрес Агента для локального запуска
+AGENT_TRANSPORT ?= grpc
+AGENT_SERVER_ADDRESS ?= $(if $(filter http,$(AGENT_TRANSPORT)),$(SERVER_HTTP_ADDRESS),$(SERVER_GRPC_ADDRESS))
+AGENT_SERVER_ADDRESS_ENV ?= $(if $(filter http,$(AGENT_TRANSPORT)),$(SERVER_HTTP_ADDRESS_ENV),$(SERVER_GRPC_ADDRESS_ENV))
+COMPOSE_AGENT_ADDRESS ?= $(if $(filter http,$(AGENT_TRANSPORT)),server:8080,server:50051)
 
 # параметры локального запуска Сервера и Агента
 RATE_LIMIT ?= 3
@@ -201,20 +207,33 @@ run-server-crypto: build-server crypto-keys
 
 # собрать и запустить Агент с параметрами командной строки
 run-agent: build-agent
-	./$(AGENT) -a=$(SERVER_HTTP_ADDRESS) -p=2 -r=10 -l=$(RATE_LIMIT) -k=$(SECRET_KEY)
+	./$(AGENT) \
+		-a=$(AGENT_SERVER_ADDRESS) \
+		--transport=$(AGENT_TRANSPORT) \
+		-p=2 \
+		-r=10 \
+		-l=$(RATE_LIMIT) \
+		-k=$(SECRET_KEY)
 
 # собрать и запустить Агент с параметрами через переменные окружения
 run-agent-env: build-agent
-	ADDRESS=$(SERVER_HTTP_ADDRESS_ENV) POLL_INTERVAL=5 REPORT_INTERVAL=15 RATE_LIMIT=$(RATE_LIMIT) KEY=$(SECRET_KEY) ./$(AGENT)
+	ADDRESS=$(AGENT_SERVER_ADDRESS_ENV) \
+	TRANSPORT=$(AGENT_TRANSPORT) \
+	POLL_INTERVAL=5 \
+	REPORT_INTERVAL=15 \
+	RATE_LIMIT=$(RATE_LIMIT) \
+	KEY=$(SECRET_KEY) \
+	./$(AGENT)
 
 # собрать и запустить Агент с параметрами из JSON-файла
 run-agent-config: build-agent crypto-keys
 	./$(AGENT) --config $(AGENT_CONFIG)
 
-# собрать и запустить Агент с публичным ключом
+# собрать и запустить HTTP-Агент с публичным ключом
 run-agent-crypto: build-agent crypto-keys
 	./$(AGENT) \
 		-a=$(SERVER_HTTP_ADDRESS) \
+		--transport=http \
 		-p=2 \
 		-r=5 \
 		-l=$(RATE_LIMIT) \
@@ -231,6 +250,8 @@ compose-up: crypto-keys
 	POSTGRES_DB=$(POSTGRES_DB) \
 	RATE_LIMIT=$(RATE_LIMIT) \
 	SECRET_KEY=$(SECRET_KEY) \
+	AGENT_TRANSPORT=$(AGENT_TRANSPORT) \
+	AGENT_ADDRESS=$(COMPOSE_AGENT_ADDRESS) \
 	docker compose up --build -d
 
 # остановить и удалить контейнеры Docker Compose

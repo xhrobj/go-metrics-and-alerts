@@ -24,6 +24,13 @@ func TestValidateAgentConfig(t *testing.T) {
 			wantError: "server address",
 		},
 		{
+			name: "invalid transport",
+			change: func(cfg *AgentConfig) {
+				cfg.Transport = "unknown"
+			},
+			wantError: "transport",
+		},
+		{
 			name: "invalid poll interval",
 			change: func(cfg *AgentConfig) {
 				cfg.PollIntervalInSec = 0

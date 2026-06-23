@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/service"
+	agenttransport "github.com/xhrobj/go-metrics-and-alerts/internal/agent/transport"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/encryption"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/hash"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
@@ -126,7 +127,7 @@ func (s *HTTPSender) postWithRetry(
 	body []byte,
 	hashValue string,
 ) error {
-	realIP, err := localIP()
+	realIP, err := agenttransport.LocalIP()
 	if err != nil {
 		return fmt.Errorf("get local IP: %w", err)
 	}
@@ -196,27 +197,6 @@ func isRetriableSendError(err error) bool {
 	}
 
 	return isRetriableHTTPError(err)
-}
-
-func localIP() (string, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", fmt.Errorf("get interface addresses: %w", err)
-	}
-
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if !ok || ipNet.IP.IsLoopback() {
-			continue
-		}
-
-		ip := ipNet.IP.To4()
-		if ip != nil {
-			return ip.String(), nil
-		}
-	}
-
-	return "", errors.New("local IPv4 address not found")
 }
 
 func isRetriableStatusCode(statusCode int) bool {

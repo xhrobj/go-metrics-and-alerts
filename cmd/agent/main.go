@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -13,10 +14,12 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/agent"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/config"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/agent/service"
+	grpctransport "github.com/xhrobj/go-metrics-and-alerts/internal/agent/transport/grpc"
 	httptransport "github.com/xhrobj/go-metrics-and-alerts/internal/agent/transport/http"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/buildinfo"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/logger"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/repository"
+	"go.uber.org/zap"
 )
 
 var (
@@ -50,7 +53,7 @@ func main() {
 	}
 }
 
-func run(ctx context.Context) error {
+func run(ctx context.Context) (err error) {
 	cfg, err := config.GetAgentConfig()
 	if err != nil {
 		return err
@@ -61,14 +64,15 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	sender, err := httptransport.NewHTTPSender(
-		cfg.ServerAddr,
-		cfg.Key,
-		cfg.CryptoKey,
-	)
+	sender, closeSender, err := newMetricsSender(cfg)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := closeSender(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close metrics sender: %w", closeErr))
+		}
+	}()
 
 	repo := repository.NewMemStorage()
 	reportingService := service.New(repo, sender, lg)
@@ -78,7 +82,45 @@ func run(ctx context.Context) error {
 		return err
 	}
 
+	logAgentStart(lg, cfg)
+
 	return a.Run(ctx)
+}
+
+func logAgentStart(log *zap.Logger, cfg config.AgentConfig) {
+	log.Info("running agent",
+		zap.String("transport", string(cfg.Transport)),
+		zap.String("address", cfg.ServerAddr),
+	)
+}
+
+func newMetricsSender(
+	cfg config.AgentConfig,
+) (service.MetricsSender, func() error, error) {
+	switch cfg.Transport {
+	case config.TransportGRPC:
+		sender, err := grpctransport.NewGRPCSender(cfg.ServerAddr)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return sender, sender.Close, nil
+
+	case config.TransportHTTP:
+		sender, err := httptransport.NewHTTPSender(
+			cfg.ServerAddr,
+			cfg.Key,
+			cfg.CryptoKey,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return sender, func() error { return nil }, nil
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported transport %q", cfg.Transport)
+	}
 }
 
 func printBanner(w io.Writer) error {

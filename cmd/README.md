@@ -28,22 +28,15 @@ cmd/agent
 -> agent.Agent
 -> agent/service.ReportingService
 -> agent/service.MetricsSender
--> agent/transport/http.HTTPSender
--> HTTP
+   -> agent/transport/grpc.GRPCSender -> gRPC
+   -> agent/transport/http.HTTPSender -> HTTP
 ```
 
-На стороне Сервера HTTP-запрос проходит через transport-слой к общему сервису метрик и repository:
+Агент использует gRPC по умолчанию. HTTP остается доступным через `--transport=http`.
 
-```text
-HTTP
--> server/transport/http/router
--> server/transport/http/middleware
--> server/transport/http/handler
--> server/service.MetricsService
--> repository
-```
+Сервер одновременно принимает оба транспорта и передает данные в общий сервис метрик и repository:
 
-Пакет `internal/server` создает эти зависимости, управляет HTTP lifecycle, persistence, аудитом и соединением с БД.
+Пакет `internal/server` создаёт зависимости, управляет двумя listener'ами, persistence, аудитом и соединением с БД.
 
 Подробности:
 
@@ -97,14 +90,17 @@ Build commit: c0decafe42
 
 ## Защита обмена
 
-Защита запросов состоит из независимых механизмов:
+Проверка trusted subnet работает для обоих транспортов. Агент передаёт локальный IPv4-адрес:
+
+- HTTP - в заголовке `X-Real-IP`
+- gRPC - в metadata `x-real-ip`
+
+`KEY` и `CRYPTO_KEY` относятся только к HTTP-транспорту:
 
 - `KEY` включает подпись исходящих HTTP-сообщений и проверку `HashSHA256`, если заголовок присутствует во входящем сообщении
 - `CRYPTO_KEY` включает гибридное шифрование RSA-OAEP + AES-GCM
-- `TRUSTED_SUBNET` ограничивает приём метрик доверенной сетью
-- Агент добавляет в запросы заголовок `X-Real-IP`
 
-При включённых сжатии, шифровании и хешировании тело запроса обрабатывается в таком порядке:
+При включённых сжатии, шифровании и хешировании HTTP-тело обрабатывается в таком порядке:
 
 ```text
 Агент:
@@ -121,13 +117,11 @@ JSON
 HashSHA256
 -> RSA-OAEP / AES-GCM
 -> gzip
--> проверка trusted subnet для update-маршрутов
+-> проверка trusted subnet
 -> handler
 ```
 
-Агенту передаётся публичный RSA-ключ, Серверу - соответствующий приватный ключ.
-
-Без `CRYPTO_KEY` сохраняется обычный сценарий обмена без шифрования. Подробности о ключах находятся в [`internal/encryption`](../internal/encryption/README.md).
+Агенту передаётся публичный RSA-ключ, Серверу - соответствующий приватный ключ. Без `CRYPTO_KEY` сохраняется обычный HTTP-сценарий без шифрования. Подробности о ключах находятся в [`internal/encryption`](../internal/encryption/README.md).
 
 ## Основные команды
 
@@ -154,6 +148,7 @@ make staticlint
 ```bash
 make generate-mocks
 make generate-reset
+make generate-proto
 make clean-generated
 ```
 
@@ -183,7 +178,7 @@ make run-agent-crypto
 
 ### Docker Compose
 
-Полный локальный стенд с PostgreSQL, Сервером, Агентом, healthcheck'ами и шифрованием запускается командой:
+Полный локальный стенд с PostgreSQL, Сервером, Агентом и healthcheck'ами запускается командой:
 
 ```bash
 make compose-up
@@ -214,6 +209,7 @@ cp .env.example .env
 
 ```bash
 make run-server TRUSTED_SUBNET=10.0.0.0/8
+make run-agent AGENT_TRANSPORT=http
 ```
 
 Для другого env-файла используется `ENV_FILE`:

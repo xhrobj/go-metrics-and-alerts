@@ -9,6 +9,7 @@ import (
 
 type agentFileConfig struct {
 	Address        *string `json:"address"`
+	Transport      *string `json:"transport"`
 	PollInterval   *string `json:"poll_interval"`
 	ReportInterval *string `json:"report_interval"`
 	RateLimit      *int    `json:"rate_limit"`
@@ -30,6 +31,10 @@ func loadAgentConfigFile(path string, cfg *AgentConfig) error {
 
 	if fileCfg.Address != nil {
 		cfg.ServerAddr = *fileCfg.Address
+	}
+
+	if fileCfg.Transport != nil {
+		cfg.Transport = Transport(*fileCfg.Transport)
 	}
 
 	if fileCfg.PollInterval != nil {

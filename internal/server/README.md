@@ -2,17 +2,6 @@
 
 Пакет является корнем приложения Сервера: создаёт зависимости, управляет жизненным циклом HTTP- и gRPC-Серверов, persistence, аудитом и соединением с PostgreSQL.
 
-```text
-cmd/server
--> server.New
--> server.Server
-   -> server/config
-   -> server/service
-   -> server/transport/http
-   -> server/transport/grpc
-   -> repository
-```
-
 ## Структура
 
 ```text
@@ -63,10 +52,40 @@ gRPC
 
 HTTP- и gRPC-транспорты используют общий `MetricsService`, repository и диспетчер аудита. Сервер слушает отдельные адреса, заданные параметрами `ADDRESS` и `GRPC_ADDRESS`.
 
+## `MetricsService`
+
+Сервис работает через интерфейс `MetricsStorage` и поддерживает:
+
+- замену значения gauge
+- накопление delta counter
+- batch-обновление метрик
+- чтение gauge и counter
+- получение snapshot всех метрик
+
+```text
+HTTP handler
+-> MetricsService
+-> MetricsStorage
+```
+
+В качестве `MetricsStorage` используются `MemStorage` или `PostgresStorage` из [`internal/repository`](../../repository/README.md).
+
+Транспортный слой зависит от интерфейса сервиса, а сервис не знает об HTTP-маршрутах, статусах и middleware. Поэтому одну реализацию `MetricsService` можно использовать из разных transport-адаптеров.
+
+## Синхронное файловое сохранение
+
+Метод `EnableSyncSave` подключает `Saver`. После этого каждое успешное изменение метрик вызывает сохранение snapshot.
+
+Этот режим используется Сервером при:
+
+```text
+DATABASE_DSN пуст
+FILE_STORAGE_PATH непустой
+STORE_INTERVAL = 0
+```
+
+При положительном интервале периодическим и финальным сохранением управляет `internal/server.Server`.
+
 ## Lifecycle
 
 `Server.Run` запускает HTTP- и gRPC-Серверы параллельно. Отмена контекста или завершение одного транспорта инициирует остановку второго транспорта. HTTP использует `Shutdown`, gRPC использует `GracefulStop` с переходом к принудительному `Stop` после общего тайм-аута.
-
-## Конфигурация
-
-Загрузка и валидация параметров описаны в [`internal/server/config`](config/README.md).
