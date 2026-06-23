@@ -9,13 +9,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TrustedSubnetInterceptor разрешает RPC только для IP-адресов из доверенной подсети.
+// Если подсеть не задана, проверка отключена.
 func TrustedSubnetInterceptor(subnet *net.IPNet) grpc.UnaryServerInterceptor {
-	return func(
-		ctx context.Context,
-		rq any,
-		_ *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler,
-	) (any, error) {
+	return func(ctx context.Context, rq any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if subnet == nil {
 			return handler(ctx, rq)
 		}

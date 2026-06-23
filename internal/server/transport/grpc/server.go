@@ -12,14 +12,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Service описывает бизнес-логику обновления метрик,
+// используемую gRPC-Сервером.
 type Service interface {
+	// UpdateMetrics сохраняет набор метрик за одну операцию.
 	UpdateMetrics(context.Context, []model.Metrics) error
 }
 
+// Auditor описывает диспетчер событий аудита.
 type Auditor interface {
+	// Notify обрабатывает событие аудита.
 	Notify(context.Context, audit.Event) error
 }
 
+// Server реализует gRPC-сервис Metrics.
 type Server struct {
 	metricspb.UnimplementedMetricsServer
 
@@ -28,9 +34,13 @@ type Server struct {
 	log     *zap.Logger
 }
 
+var _ metricspb.MetricsServer = (*Server)(nil)
+
+// New создаёт gRPC-Сервер, использующий переданный сервис метрик.
 func New(service Service) *Server {
 	return &Server{
 		service: service,
+		log:     zap.NewNop(),
 	}
 }
 
@@ -43,11 +53,12 @@ func (s *Server) EnableAudit(auditor Auditor, log *zap.Logger) {
 	}
 }
 
+// UpdateMetrics принимает и сохраняет батч метрик.
 func (s *Server) UpdateMetrics(
 	ctx context.Context,
-	request *metricspb.UpdateMetricsRequest,
+	rq *metricspb.UpdateMetricsRequest,
 ) (*metricspb.UpdateMetricsResponse, error) {
-	metrics, err := metricsFromProto(request)
+	metrics, err := metricsFromProto(rq)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -55,6 +66,8 @@ func (s *Server) UpdateMetrics(
 	if err := s.service.UpdateMetrics(ctx, metrics); err != nil {
 		return nil, serviceError(err)
 	}
+
+	s.notifyAudit(ctx, metrics)
 
 	return metricspb.UpdateMetricsResponse_builder{}.Build(), nil
 }
@@ -65,10 +78,7 @@ func serviceError(err error) error {
 		return status.Error(codes.Canceled, context.Canceled.Error())
 
 	case errors.Is(err, context.DeadlineExceeded):
-		return status.Error(
-			codes.DeadlineExceeded,
-			context.DeadlineExceeded.Error(),
-		)
+		return status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
 
 	default:
 		return status.Error(codes.Internal, "update metrics failed")

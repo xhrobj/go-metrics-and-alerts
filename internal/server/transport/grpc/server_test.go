@@ -3,31 +3,53 @@ package grpcserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	metricspb "github.com/xhrobj/go-metrics-and-alerts/internal/proto"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/server/audit"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 type serviceStub struct {
-	called     bool
+	calls      int
+	gotContext context.Context
 	gotMetrics []model.Metrics
 	err        error
 }
 
-func (s *serviceStub) UpdateMetrics(_ context.Context, metrics []model.Metrics) error {
-	s.called = true
+func (s *serviceStub) UpdateMetrics(ctx context.Context, metrics []model.Metrics) error {
+	s.calls++
+	s.gotContext = ctx
 	s.gotMetrics = metrics
 
 	return s.err
 }
 
+type auditorStub struct {
+	calls      int
+	gotContext context.Context
+	events     []audit.Event
+	err        error
+}
+
+func (a *auditorStub) Notify(ctx context.Context, event audit.Event) error {
+	a.calls++
+	a.gotContext = ctx
+	a.events = append(a.events, event)
+
+	return a.err
+}
+
 func TestServerUpdateMetrics(t *testing.T) {
-	service := &serviceStub{}
-	server := New(service)
+	srv := &serviceStub{}
+	grpcServer := New(srv)
 
 	rq := metricspb.UpdateMetricsRequest_builder{
 		Metrics: []*metricspb.Metric{
@@ -44,15 +66,16 @@ func TestServerUpdateMetrics(t *testing.T) {
 		},
 	}.Build()
 
-	rs, err := server.UpdateMetrics(context.Background(), rq)
+	ctx := context.Background()
+	rs, err := grpcServer.UpdateMetrics(ctx, rq)
 
 	require.NoError(t, err)
 	require.NotNil(t, rs)
-	require.True(t, service.called)
+	require.Equal(t, 1, srv.calls, "got calls %d, want 1", srv.calls)
+	require.Equal(t, ctx, srv.gotContext)
 
 	gaugeValue := 5.11
 	counterDelta := int64(42)
-
 	want := []model.Metrics{
 		{
 			ID:    "Alloc",
@@ -66,61 +89,182 @@ func TestServerUpdateMetrics(t *testing.T) {
 		},
 	}
 
-	require.Equal(t, want, service.gotMetrics)
+	require.Equal(t, want, srv.gotMetrics)
+}
+
+func TestServerUpdateMetricsRejectsInvalidRequest(t *testing.T) {
+	srv := &serviceStub{}
+	grpcServer := New(srv)
+
+	rs, err := grpcServer.UpdateMetrics(context.Background(), nil)
+
+	require.Nil(t, rs)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
+	require.Equal(t, "request is nil", status.Convert(err).Message())
+	require.Zero(t, srv.calls)
 }
 
 func TestServerUpdateMetricsMapsServiceErrors(t *testing.T) {
 	tests := []struct {
-		name     string
-		err      error
-		wantCode codes.Code
+		name        string
+		err         error
+		wantCode    codes.Code
+		wantMessage string
 	}{
 		{
-			name:     "canceled",
-			err:      context.Canceled,
-			wantCode: codes.Canceled,
+			name:        "canceled",
+			err:         context.Canceled,
+			wantCode:    codes.Canceled,
+			wantMessage: context.Canceled.Error(),
 		},
 		{
-			name:     "deadline exceeded",
-			err:      context.DeadlineExceeded,
-			wantCode: codes.DeadlineExceeded,
+			name:        "wrapped canceled",
+			err:         fmt.Errorf("update metrics: %w", context.Canceled),
+			wantCode:    codes.Canceled,
+			wantMessage: context.Canceled.Error(),
 		},
 		{
-			name:     "internal error",
-			err:      errors.New("repository unavailable"),
-			wantCode: codes.Internal,
+			name:        "deadline exceeded",
+			err:         context.DeadlineExceeded,
+			wantCode:    codes.DeadlineExceeded,
+			wantMessage: context.DeadlineExceeded.Error(),
+		},
+		{
+			name:        "wrapped deadline exceeded",
+			err:         fmt.Errorf("update metrics: %w", context.DeadlineExceeded),
+			wantCode:    codes.DeadlineExceeded,
+			wantMessage: context.DeadlineExceeded.Error(),
+		},
+		{
+			name:        "internal error",
+			err:         errors.New("repository unavailable"),
+			wantCode:    codes.Internal,
+			wantMessage: "update metrics failed",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := &serviceStub{
-				err: tt.err,
-			}
-			server := New(service)
-
+			srv := &serviceStub{err: tt.err}
+			grpcServer := New(srv)
 			rq := metricspb.UpdateMetricsRequest_builder{}.Build()
 
-			rs, err := server.UpdateMetrics(context.Background(), rq)
+			rs, err := grpcServer.UpdateMetrics(context.Background(), rq)
 
 			require.Nil(t, rs)
 			require.Equal(t, tt.wantCode, status.Code(err))
-			require.True(t, service.called)
+			require.Equal(t, tt.wantMessage, status.Convert(err).Message())
+			require.Equal(t, 1, srv.calls, "got calls %d, want 1", srv.calls)
 		})
 	}
 }
 
-func TestServerUpdateMetricsDoesNotExposeInternalError(t *testing.T) {
-	service := &serviceStub{
-		err: errors.New("postgres password leaked here"),
+func TestServerUpdateMetricsNotifiesAuditor(t *testing.T) {
+	srv := &serviceStub{}
+	auditor := &auditorStub{}
+	grpcServer := New(srv)
+	grpcServer.EnableAudit(auditor, zap.NewNop())
+
+	ctx := metadata.NewIncomingContext(
+		context.Background(),
+		metadata.Pairs(protocol.MetadataRealIP, "203.0.113.10"),
+	)
+	rq := metricspb.UpdateMetricsRequest_builder{
+		Metrics: []*metricspb.Metric{
+			metricspb.Metric_builder{
+				Id:    "Alloc",
+				Type:  metricspb.Metric_GAUGE,
+				Value: 5.11,
+			}.Build(),
+			metricspb.Metric_builder{
+				Id:    "PollCount",
+				Type:  metricspb.Metric_COUNTER,
+				Delta: 42,
+			}.Build(),
+		},
+	}.Build()
+
+	rs, err := grpcServer.UpdateMetrics(ctx, rq)
+
+	require.NoError(t, err)
+	require.NotNil(t, rs)
+	require.Equal(t, 1, auditor.calls, "got calls %d, want 1", auditor.calls)
+	require.Equal(t, ctx, auditor.gotContext)
+	require.Len(t, auditor.events, 1)
+
+	event := auditor.events[0]
+	require.NotZero(t, event.TS)
+	require.Equal(t, []string{"Alloc", "PollCount"}, event.Metrics)
+	require.Equal(t, "203.0.113.10", event.IPAddress)
+}
+
+func TestServerUpdateMetricsIgnoresAuditorError(t *testing.T) {
+	srv := &serviceStub{}
+	auditor := &auditorStub{err: errors.New("audit failed")}
+	grpcServer := New(srv)
+	grpcServer.EnableAudit(auditor, nil)
+
+	rq := metricspb.UpdateMetricsRequest_builder{
+		Metrics: []*metricspb.Metric{
+			metricspb.Metric_builder{
+				Id:    "Alloc",
+				Type:  metricspb.Metric_GAUGE,
+				Value: 5.11,
+			}.Build(),
+		},
+	}.Build()
+
+	rs, err := grpcServer.UpdateMetrics(context.Background(), rq)
+
+	require.NoError(t, err)
+	require.NotNil(t, rs)
+	require.Equal(t, 1, auditor.calls, "got calls %d, want 1", auditor.calls)
+}
+
+func TestServerUpdateMetricsDoesNotNotifyAuditor(t *testing.T) {
+	tests := []struct {
+		name    string
+		srvErr  error
+		rq      *metricspb.UpdateMetricsRequest
+		wantErr bool
+	}{
+		{
+			name:   "service error",
+			srvErr: errors.New("repository unavailable"),
+			rq: metricspb.UpdateMetricsRequest_builder{
+				Metrics: []*metricspb.Metric{
+					metricspb.Metric_builder{
+						Id:    "Alloc",
+						Type:  metricspb.Metric_GAUGE,
+						Value: 5.11,
+					}.Build(),
+				},
+			}.Build(),
+			wantErr: true,
+		},
+		{
+			name: "empty batch",
+			rq:   metricspb.UpdateMetricsRequest_builder{}.Build(),
+		},
 	}
-	server := New(service)
 
-	rq := metricspb.UpdateMetricsRequest_builder{}.Build()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := &serviceStub{err: tt.srvErr}
+			auditor := &auditorStub{}
+			grpcServer := New(srv)
+			grpcServer.EnableAudit(auditor, zap.NewNop())
 
-	rs, err := server.UpdateMetrics(context.Background(), rq)
+			rs, err := grpcServer.UpdateMetrics(context.Background(), tt.rq)
 
-	require.Nil(t, rs)
-	require.Equal(t, codes.Internal, status.Code(err))
-	require.Equal(t, "update metrics failed", status.Convert(err).Message())
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Nil(t, rs)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, rs)
+			}
+			require.Zero(t, auditor.calls)
+		})
+	}
 }

@@ -17,11 +17,18 @@ func TestValidateServerConfig(t *testing.T) {
 			name: "valid",
 		},
 		{
-			name: "empty server address",
+			name: "empty HTTP server address",
 			change: func(cfg *ServerConfig) {
-				cfg.ServerAddr = ""
+				cfg.HTTPAddr = ""
 			},
-			wantError: "server address",
+			wantError: "HTTP server address",
+		},
+		{
+			name: "empty gRPC server address",
+			change: func(cfg *ServerConfig) {
+				cfg.GRPCAddr = ""
+			},
+			wantError: "gRPC server address",
 		},
 		{
 			name: "negative store interval",

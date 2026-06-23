@@ -16,6 +16,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/router"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 const shutdownTimeout = time.Second * 30
@@ -28,6 +29,8 @@ type Server struct {
 
 	httpServer   *http.Server
 	httpListener net.Listener
+	grpcServer   *grpc.Server
+	grpcListener net.Listener
 
 	shutdownPersistence func() error
 	persistenceOnce     sync.Once
@@ -37,7 +40,7 @@ type Server struct {
 	closeOnce           sync.Once
 }
 
-// New создаёт Сервер, настраивает зависимости и открывает HTTP-listener.
+// New создаёт Сервер, настраивает зависимости и открывает HTTP- и gRPC-listener'ы.
 func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 	if log == nil {
 		log = zap.NewNop()
@@ -95,9 +98,26 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 		TrustedSubnet: trustedSubnet,
 	})
 
-	srv.httpListener, err = net.Listen("tcp", cfg.ServerAddr)
+	srv.httpServer = &http.Server{
+		Addr:    cfg.HTTPAddr,
+		Handler: httpHandler,
+	}
+
+	srv.grpcServer = newGRPCServer(
+		metricsService,
+		srv.auditor,
+		trustedSubnet,
+		log,
+	)
+
+	srv.httpListener, err = net.Listen("tcp", cfg.HTTPAddr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listen HTTP: %w", err)
+	}
+
+	srv.grpcListener, err = net.Listen("tcp", cfg.GRPCAddr)
+	if err != nil {
+		return nil, fmt.Errorf("listen gRPC: %w", err)
 	}
 
 	srv.shutdownPersistence, err = setupFilePersistence(cfg, metricsService, memRepo, log)
@@ -105,24 +125,27 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 		return nil, err
 	}
 
-	srv.httpServer = &http.Server{
-		Addr:    cfg.ServerAddr,
-		Handler: httpHandler,
-	}
-
 	return srv, nil
 }
 
-// Run запускает HTTP-Сервер и выполняет штатное завершение после отмены контекста.
+// Run запускает HTTP- и gRPC-Серверы и выполняет штатное завершение после отмены контекста.
 func (s *Server) Run(ctx context.Context) error {
 	s.log.Info("running server",
-		zap.String("address", s.cfg.ServerAddr),
+		zap.String("httpAddress", s.cfg.HTTPAddr),
+		zap.String("grpcAddress", s.cfg.GRPCAddr),
 		zap.String("fileStoragePath", s.cfg.FileStoragePath),
 		zap.Bool("restore", s.cfg.Restore),
 		zap.Int("storeIntervalInSec", s.cfg.StoreIntervalInSec),
 	)
 
-	serveErr := serveHTTP(ctx, s.httpServer, s.httpListener, s.log)
+	serveErr := serveTransports(
+		ctx,
+		s.httpServer,
+		s.httpListener,
+		s.grpcServer,
+		s.grpcListener,
+		s.log,
+	)
 	persistenceErr := s.stopPersistence()
 
 	if serveErr == nil && persistenceErr == nil {
@@ -141,8 +164,20 @@ func (s *Server) Close() {
 	s.closeOnce.Do(func() {
 		_ = s.stopPersistence()
 
+		if s.httpServer != nil {
+			_ = s.httpServer.Close()
+		}
+
 		if s.httpListener != nil {
 			_ = s.httpListener.Close()
+		}
+
+		if s.grpcServer != nil {
+			s.grpcServer.Stop()
+		}
+
+		if s.grpcListener != nil {
+			_ = s.grpcListener.Close()
 		}
 
 		if s.cleanupAudit != nil {
@@ -163,11 +198,47 @@ func (s *Server) stopPersistence() error {
 	return s.persistenceErr
 }
 
-func serveHTTP(ctx context.Context, srv *http.Server, httpListener net.Listener, log *zap.Logger) error {
+func serveTransports(
+	ctx context.Context,
+	httpServer *http.Server,
+	httpListener net.Listener,
+	grpcServer *grpc.Server,
+	grpcListener net.Listener,
+	log *zap.Logger,
+) error {
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	errCh := make(chan error, 2)
+
+	go func() {
+		err := serveHTTP(runCtx, httpServer, httpListener, log)
+		if err != nil {
+			err = fmt.Errorf("serve HTTP: %w", err)
+		}
+		errCh <- err
+	}()
+
+	go func() {
+		err := serveGRPC(runCtx, grpcServer, grpcListener, log)
+		if err != nil {
+			err = fmt.Errorf("serve gRPC: %w", err)
+		}
+		errCh <- err
+	}()
+
+	firstErr := <-errCh
+	cancel()
+	secondErr := <-errCh
+
+	return errors.Join(firstErr, secondErr)
+}
+
+func serveHTTP(ctx context.Context, srv *http.Server, listener net.Listener, log *zap.Logger) error {
 	errCh := make(chan error, 1)
 
 	go func() {
-		errCh <- srv.Serve(httpListener)
+		errCh <- srv.Serve(listener)
 	}()
 
 	select {
@@ -179,7 +250,7 @@ func serveHTTP(ctx context.Context, srv *http.Server, httpListener net.Listener,
 		return err
 
 	case <-ctx.Done():
-		log.Info("shutdown signal received")
+		log.Info("shutdown signal received", zap.String("transport", "HTTP"))
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(

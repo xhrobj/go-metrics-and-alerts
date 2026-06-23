@@ -9,6 +9,7 @@ import (
 
 type serverFileConfig struct {
 	Address       *string `json:"address"`
+	GRPCAddress   *string `json:"grpc_address"`
 	StoreInterval *string `json:"store_interval"`
 	StoreFile     *string `json:"store_file"`
 	Restore       *bool   `json:"restore"`
@@ -33,7 +34,11 @@ func loadServerConfigFile(path string, cfg *ServerConfig) error {
 	}
 
 	if fileCfg.Address != nil {
-		cfg.ServerAddr = *fileCfg.Address
+		cfg.HTTPAddr = *fileCfg.Address
+	}
+
+	if fileCfg.GRPCAddress != nil {
+		cfg.GRPCAddr = *fileCfg.GRPCAddress
 	}
 
 	if fileCfg.StoreInterval != nil {

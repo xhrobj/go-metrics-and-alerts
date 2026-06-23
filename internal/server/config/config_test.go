@@ -17,7 +17,8 @@ func TestParseServerConfig(t *testing.T) {
 		{
 			name: "defaults",
 			want: ServerConfig{
-				ServerAddr:         "localhost:8080",
+				HTTPAddr:           "localhost:8080",
+				GRPCAddr:           "localhost:50051",
 				StoreIntervalInSec: 300,
 				FileStoragePath:    "metrics-db.json",
 			},
@@ -26,6 +27,7 @@ func TestParseServerConfig(t *testing.T) {
 			name: "flags",
 			args: []string{
 				"-a", "server:8081",
+				"-g", "grpc-server:3201",
 				"-i", "60",
 				"-f", "metrics.json",
 				"-r",
@@ -37,7 +39,8 @@ func TestParseServerConfig(t *testing.T) {
 				"--audit-url", "http://audit",
 			},
 			want: ServerConfig{
-				ServerAddr:         "server:8081",
+				HTTPAddr:           "server:8081",
+				GRPCAddr:           "grpc-server:3201",
 				StoreIntervalInSec: 60,
 				FileStoragePath:    "metrics.json",
 				Restore:            true,
@@ -53,6 +56,7 @@ func TestParseServerConfig(t *testing.T) {
 			name: "environment overrides flags",
 			args: []string{
 				"-a", "flag-server:8081",
+				"-g", "flag-grpc:3201",
 				"-i", "60",
 				"-f", "flag-metrics.json",
 				"-r=false",
@@ -65,6 +69,7 @@ func TestParseServerConfig(t *testing.T) {
 			},
 			env: map[string]string{
 				"ADDRESS":           "env-server:8082",
+				"GRPC_ADDRESS":      "env-grpc:3202",
 				"STORE_INTERVAL":    "120",
 				"FILE_STORAGE_PATH": "env-metrics.json",
 				"RESTORE":           "true",
@@ -76,7 +81,8 @@ func TestParseServerConfig(t *testing.T) {
 				"AUDIT_URL":         "http://env-audit",
 			},
 			want: ServerConfig{
-				ServerAddr:         "env-server:8082",
+				HTTPAddr:           "env-server:8082",
+				GRPCAddr:           "env-grpc:3202",
 				StoreIntervalInSec: 120,
 				FileStoragePath:    "env-metrics.json",
 				Restore:            true,
@@ -95,7 +101,8 @@ func TestParseServerConfig(t *testing.T) {
 				"STORE_FILE":        "new-name.json",
 			},
 			want: ServerConfig{
-				ServerAddr:         "localhost:8080",
+				HTTPAddr:           "localhost:8080",
+				GRPCAddr:           "localhost:50051",
 				StoreIntervalInSec: 300,
 				FileStoragePath:    "new-name.json",
 			},
@@ -119,6 +126,7 @@ func TestParseServerConfig(t *testing.T) {
 func TestParseServerConfigFromFile(t *testing.T) {
 	configPath := writeServerConfigFile(t, `{
 		"address": "json-server:8083",
+		"grpc_address": "json-grpc:3203",
 		"store_interval": "45s",
 		"store_file": "json-metrics.json",
 		"restore": true,
@@ -139,7 +147,8 @@ func TestParseServerConfigFromFile(t *testing.T) {
 	}
 
 	want := ServerConfig{
-		ServerAddr:         "json-server:8083",
+		HTTPAddr:           "json-server:8083",
+		GRPCAddr:           "json-grpc:3203",
 		StoreIntervalInSec: 45,
 		FileStoragePath:    "json-metrics.json",
 		Restore:            true,
@@ -170,7 +179,8 @@ func TestParseServerConfigFileKeepsDefaults(t *testing.T) {
 	}
 
 	want := ServerConfig{
-		ServerAddr:         "json-server:8083",
+		HTTPAddr:           "json-server:8083",
+		GRPCAddr:           "localhost:50051",
 		StoreIntervalInSec: 300,
 		FileStoragePath:    "metrics-db.json",
 	}
@@ -183,6 +193,7 @@ func TestParseServerConfigFileKeepsDefaults(t *testing.T) {
 func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 	configPath := writeServerConfigFile(t, `{
 		"address": "json-server:8083",
+		"grpc_address": "json-grpc:3203",
 		"store_interval": "45s",
 		"store_file": "json-metrics.json",
 		"restore": true,
@@ -197,6 +208,7 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 	got, err := parseServerConfig(
 		[]string{
 			"-a", "flag-server:8084",
+			"-g", "flag-grpc:3204",
 			"-i", "60",
 			"-f", "flag-metrics.json",
 			"-r=false",
@@ -215,7 +227,8 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 	}
 
 	want := ServerConfig{
-		ServerAddr:         "flag-server:8084",
+		HTTPAddr:           "flag-server:8084",
+		GRPCAddr:           "flag-grpc:3204",
 		StoreIntervalInSec: 60,
 		FileStoragePath:    "flag-metrics.json",
 		Restore:            false,
@@ -235,6 +248,7 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 	configPath := writeServerConfigFile(t, `{
 		"address": "json-server:8083",
+		"grpc_address": "json-grpc:3203",
 		"store_interval": "45s",
 		"store_file": "json-metrics.json",
 		"restore": false,
@@ -249,6 +263,7 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 	got, err := parseServerConfig(
 		[]string{
 			"-a", "flag-server:8084",
+			"-g", "flag-grpc:3204",
 			"-i", "60",
 			"-f", "flag-metrics.json",
 			"-r=false",
@@ -262,6 +277,7 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 		},
 		testLookupEnv(map[string]string{
 			"ADDRESS":        "env-server:8085",
+			"GRPC_ADDRESS":   "env-grpc:3205",
 			"STORE_INTERVAL": "120",
 			"STORE_FILE":     "env-metrics.json",
 			"RESTORE":        "true",
@@ -278,7 +294,8 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 	}
 
 	want := ServerConfig{
-		ServerAddr:         "env-server:8085",
+		HTTPAddr:           "env-server:8085",
+		GRPCAddr:           "env-grpc:3205",
 		StoreIntervalInSec: 120,
 		FileStoragePath:    "env-metrics.json",
 		Restore:            true,
@@ -297,11 +314,13 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 
 func TestParseServerConfigEnvironmentOverridesConfigFlag(t *testing.T) {
 	flagConfigPath := writeServerConfigFile(t, `{
-		"address": "flag-file-server:8081"
+		"address": "flag-file-server:8081",
+		"grpc_address": "flag-file-grpc:3201"
 	}`)
 
 	envConfigPath := writeServerConfigFile(t, `{
-		"address": "env-file-server:8082"
+		"address": "env-file-server:8082",
+		"grpc_address": "env-file-grpc:3202"
 	}`)
 
 	got, err := parseServerConfig(
@@ -315,7 +334,8 @@ func TestParseServerConfigEnvironmentOverridesConfigFlag(t *testing.T) {
 	}
 
 	want := ServerConfig{
-		ServerAddr:         "env-file-server:8082",
+		HTTPAddr:           "env-file-server:8082",
+		GRPCAddr:           "env-file-grpc:3202",
 		StoreIntervalInSec: 300,
 		FileStoragePath:    "metrics-db.json",
 	}

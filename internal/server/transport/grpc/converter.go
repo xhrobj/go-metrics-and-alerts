@@ -1,14 +1,19 @@
 package grpcserver
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
 	metricspb "github.com/xhrobj/go-metrics-and-alerts/internal/proto"
 )
 
-func metricsFromProto(request *metricspb.UpdateMetricsRequest) ([]model.Metrics, error) {
-	protoMetrics := request.GetMetrics()
+func metricsFromProto(rq *metricspb.UpdateMetricsRequest) ([]model.Metrics, error) {
+	if rq == nil {
+		return nil, errors.New("request is nil")
+	}
+
+	protoMetrics := rq.GetMetrics()
 	metrics := make([]model.Metrics, 0, len(protoMetrics))
 
 	for i, protoMetric := range protoMetrics {
@@ -24,6 +29,14 @@ func metricsFromProto(request *metricspb.UpdateMetricsRequest) ([]model.Metrics,
 }
 
 func metricFromProto(protoMetric *metricspb.Metric) (model.Metrics, error) {
+	if protoMetric == nil {
+		return model.Metrics{}, errors.New("metric is nil")
+	}
+
+	if protoMetric.GetId() == "" {
+		return model.Metrics{}, errors.New("metric id is empty")
+	}
+
 	switch protoMetric.GetType() {
 	case metricspb.Metric_GAUGE:
 		value := protoMetric.GetValue()
@@ -44,9 +57,6 @@ func metricFromProto(protoMetric *metricspb.Metric) (model.Metrics, error) {
 		}, nil
 
 	default:
-		return model.Metrics{}, fmt.Errorf(
-			"unknown metric type: %d",
-			protoMetric.GetType(),
-		)
+		return model.Metrics{}, fmt.Errorf("unknown metric type: %d", protoMetric.GetType())
 	}
 }

@@ -7,8 +7,11 @@ import (
 
 // ServerConfig содержит параметры конфигурации Сервера.
 type ServerConfig struct {
-	// ServerAddr - адрес и порт запуска HTTP-Сервера.
-	ServerAddr string
+	// HTTPAddr - адрес и порт запуска HTTP-Сервера.
+	HTTPAddr string
+
+	// GRPCAddr - адрес и порт запуска gRPC-Сервера.
+	GRPCAddr string
 
 	// StoreIntervalInSec - интервал сохранения метрик на диск в секундах.
 	StoreIntervalInSec int
@@ -46,9 +49,10 @@ type ServerConfig struct {
 // GetServerConfig возвращает конфигурацию Сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -i -f -r -d -k --crypto-key -t --audit-file --audit-url -c/--config
+//   - флаги: -a -g -i -f -r -d -k --crypto-key -t --audit-file --audit-url -c/--config
 //   - переменные окружения:
 //     ADDRESS,
+//     GRPC_ADDRESS,
 //     STORE_INTERVAL,
 //     FILE_STORAGE_PATH / STORE_FILE,
 //     RESTORE,
@@ -72,7 +76,8 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 
 	flags := flag.NewFlagSet("server", flag.ContinueOnError)
 
-	flags.StringVar(&flagCfg.ServerAddr, "a", flagCfg.ServerAddr, "address and port to run server")
+	flags.StringVar(&flagCfg.HTTPAddr, "a", flagCfg.HTTPAddr, "address and port to run HTTP server")
+	flags.StringVar(&flagCfg.GRPCAddr, "g", flagCfg.GRPCAddr, "address and port to run gRPC server")
 	flags.IntVar(&flagCfg.StoreIntervalInSec, "i", flagCfg.StoreIntervalInSec, "store interval in seconds")
 	flags.StringVar(&flagCfg.FileStoragePath, "f", flagCfg.FileStoragePath, "path to metrics storage file")
 	flags.BoolVar(&flagCfg.Restore, "r", flagCfg.Restore, "restore metrics from file on startup")
@@ -122,7 +127,8 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 
 func defaultServerConfig() ServerConfig {
 	return ServerConfig{
-		ServerAddr:         "localhost:8080",
+		HTTPAddr:           "localhost:8080",
+		GRPCAddr:           "localhost:50051",
 		StoreIntervalInSec: 300,
 		FileStoragePath:    "metrics-db.json",
 	}
@@ -130,7 +136,11 @@ func defaultServerConfig() ServerConfig {
 
 func applyServerFlags(cfg *ServerConfig, flagCfg ServerConfig, setFlags map[string]bool) {
 	if setFlags["a"] {
-		cfg.ServerAddr = flagCfg.ServerAddr
+		cfg.HTTPAddr = flagCfg.HTTPAddr
+	}
+
+	if setFlags["g"] {
+		cfg.GRPCAddr = flagCfg.GRPCAddr
 	}
 
 	if setFlags["i"] {
@@ -171,8 +181,12 @@ func applyServerFlags(cfg *ServerConfig, flagCfg ServerConfig, setFlags map[stri
 }
 
 func applyServerEnvironment(cfg *ServerConfig, lookupEnv lookupEnvFunc) error {
-	if serverAddr, ok := lookupEnv("ADDRESS"); ok {
-		cfg.ServerAddr = serverAddr
+	if httpAddr, ok := lookupEnv("ADDRESS"); ok {
+		cfg.HTTPAddr = httpAddr
+	}
+
+	if grpcAddr, ok := lookupEnv("GRPC_ADDRESS"); ok {
+		cfg.GRPCAddr = grpcAddr
 	}
 
 	if storeIntervalInSec, ok, err := getEnvInt(lookupEnv, "STORE_INTERVAL"); err != nil {

@@ -25,11 +25,13 @@ services:
         BUILD_COMMIT: ${BUILD_COMMIT:-N/A}
     environment:
       ADDRESS: ":8080"
+      GRPC_ADDRESS: ":50051"
       DATABASE_DSN: "postgres://${POSTGRES_USER:-metrics}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-metricsdb}?sslmode=disable"
       KEY: ${SECRET_KEY:-god}
       CRYPTO_KEY: /run/secrets/server_private_key
     ports:
       - "8080:8080"
+      - "50051:50051"
     secrets:
       - server_private_key
     depends_on:

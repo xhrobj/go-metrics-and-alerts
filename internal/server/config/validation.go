@@ -7,8 +7,12 @@ import (
 )
 
 func validateServerConfig(cfg ServerConfig) error {
-	if cfg.ServerAddr == "" {
-		return fmt.Errorf("server address must not be empty")
+	if cfg.HTTPAddr == "" {
+		return fmt.Errorf("HTTP server address must not be empty")
+	}
+
+	if cfg.GRPCAddr == "" {
+		return fmt.Errorf("gRPC server address must not be empty")
 	}
 
 	if cfg.StoreIntervalInSec < 0 {

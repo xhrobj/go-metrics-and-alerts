@@ -23,9 +23,11 @@ POSTGRES_PORT ?= 5432
 POSTGRES_DB ?= metricsdb
 POSTGRES_DSN=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
 
-# адреса Сервера для запуска через флаги и переменные окружения
-SERVER_ADDRESS_DEFAULT ?= localhost:8080
-SERVER_ADDRESS_ENV ?= localhost:8088
+# адреса HTTP- и gRPC-Сервера для локального запуска
+SERVER_HTTP_ADDRESS ?= localhost:8080
+SERVER_HTTP_ADDRESS_ENV ?= localhost:8088
+SERVER_GRPC_ADDRESS ?= localhost:50051
+SERVER_GRPC_ADDRESS_ENV ?= localhost:50058
 
 # параметры локального запуска Сервера и Агента
 RATE_LIMIT ?= 3
@@ -113,8 +115,8 @@ clean-generated:
 	find . -name 'reset.gen.go' ! -path './cmd/reset/testdata/*' -exec rm -f {} +
 	rm -f internal/proto/*.pb.go
 
-# очистить артефакты сборки, coverage, тестовые бинарники и сгенерированный Go-код
-clean: clean-generated
+# очистить артефакты сборки, coverage и тестовые бинарники
+clean:
 	rm -f $(SERVER) $(AGENT) coverage.out
 	find . -name "*.test" -delete
 
@@ -167,7 +169,8 @@ postgres-connect:
 # собрать и запустить Сервер с параметрами командной строки
 run-server: build-server
 	./$(SERVER) \
-		-a=$(SERVER_ADDRESS_DEFAULT) \
+		-a=$(SERVER_HTTP_ADDRESS) \
+		-g=$(SERVER_GRPC_ADDRESS) \
 		-d=$(POSTGRES_DSN) \
 		-k=$(SECRET_KEY) \
 		-t=$(TRUSTED_SUBNET) \
@@ -175,7 +178,8 @@ run-server: build-server
 
 # собрать и запустить Сервер с параметрами через переменные окружения
 run-server-env: build-server
-	ADDRESS=$(SERVER_ADDRESS_ENV) \
+	ADDRESS=$(SERVER_HTTP_ADDRESS_ENV) \
+	GRPC_ADDRESS=$(SERVER_GRPC_ADDRESS_ENV) \
 	DATABASE_DSN=$(POSTGRES_DSN) \
 	KEY=$(SECRET_KEY) \
 	TRUSTED_SUBNET=$(TRUSTED_SUBNET) \
@@ -189,18 +193,19 @@ run-server-config: build-server crypto-keys
 # собрать и запустить Сервер с приватным ключом
 run-server-crypto: build-server crypto-keys
 	./$(SERVER) \
-		-a=$(SERVER_ADDRESS_DEFAULT) \
+		-a=$(SERVER_HTTP_ADDRESS) \
+		-g=$(SERVER_GRPC_ADDRESS) \
 		-k=$(SECRET_KEY) \
 		--crypto-key=$(SERVER_PRIVATE_KEY) \
 		-t=$(TRUSTED_SUBNET)
 
 # собрать и запустить Агент с параметрами командной строки
 run-agent: build-agent
-	./$(AGENT) -a=$(SERVER_ADDRESS_DEFAULT) -p=2 -r=10 -l=$(RATE_LIMIT) -k=$(SECRET_KEY)
+	./$(AGENT) -a=$(SERVER_HTTP_ADDRESS) -p=2 -r=10 -l=$(RATE_LIMIT) -k=$(SECRET_KEY)
 
 # собрать и запустить Агент с параметрами через переменные окружения
 run-agent-env: build-agent
-	ADDRESS=$(SERVER_ADDRESS_ENV) POLL_INTERVAL=5 REPORT_INTERVAL=15 RATE_LIMIT=$(RATE_LIMIT) KEY=$(SECRET_KEY) ./$(AGENT)
+	ADDRESS=$(SERVER_HTTP_ADDRESS_ENV) POLL_INTERVAL=5 REPORT_INTERVAL=15 RATE_LIMIT=$(RATE_LIMIT) KEY=$(SECRET_KEY) ./$(AGENT)
 
 # собрать и запустить Агент с параметрами из JSON-файла
 run-agent-config: build-agent crypto-keys
@@ -209,7 +214,7 @@ run-agent-config: build-agent crypto-keys
 # собрать и запустить Агент с публичным ключом
 run-agent-crypto: build-agent crypto-keys
 	./$(AGENT) \
-		-a=$(SERVER_ADDRESS_DEFAULT) \
+		-a=$(SERVER_HTTP_ADDRESS) \
 		-p=2 \
 		-r=5 \
 		-l=$(RATE_LIMIT) \
