@@ -28,7 +28,7 @@ internal/server/
 ├── migrations/     # запуск SQL-миграций
 ├── service/        # бизнес-логика метрик
 └── transport/
-    ├── grpc/       # gRPC-сервис, metadata, аудит и interceptor trusted subnet
+    ├── grpc/       # gRPC-сервис, metadata, аудит, логирование и проверка trusted subnet
     └── http/
         ├── handler/    # HTTP-обработчики
         ├── middleware/ # HTTP middleware
@@ -54,6 +54,7 @@ gRPC-запрос проходит через UnaryInterceptor к реализа
 
 ```text
 gRPC
+-> transport/grpc/LoggingInterceptor
 -> transport/grpc/TrustedSubnetInterceptor
 -> transport/grpc/Server.UpdateMetrics
 -> service.MetricsService

@@ -25,7 +25,8 @@ func newGRPCServer(
 	}
 
 	srv := grpc.NewServer(
-		grpc.UnaryInterceptor(
+		grpc.ChainUnaryInterceptor(
+			grpcserver.LoggingInterceptor(log),
 			grpcserver.TrustedSubnetInterceptor(trustedSubnet),
 		),
 	)

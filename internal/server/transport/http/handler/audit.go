@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/audit"
 	"go.uber.org/zap"
 )
@@ -43,6 +44,10 @@ func (h *Handler) notifyAudit(r *http.Request, metrics []string) {
 }
 
 func clientIP(r *http.Request) string {
+	if realIP := r.Header.Get(protocol.HeaderRealIP); realIP != "" {
+		return realIP
+	}
+
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

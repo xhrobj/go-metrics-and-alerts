@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/model"
+	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/audit"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler"
 	"go.uber.org/mock/gomock"
@@ -56,6 +57,7 @@ func TestHandler_UpdateJSON_NotifiesAuditor(t *testing.T) {
 		bytes.NewBufferString(body),
 	)
 	rq.Header.Set("Content-Type", "application/json")
+	rq.Header.Set(protocol.HeaderRealIP, "198.51.100.42")
 	rq.RemoteAddr = "203.0.113.10:4321"
 
 	rs := httptest.NewRecorder()
@@ -69,7 +71,7 @@ func TestHandler_UpdateJSON_NotifiesAuditor(t *testing.T) {
 
 	require.NotZero(t, event.TS)
 	require.Equal(t, []string{"Alloc"}, event.Metrics)
-	require.Equal(t, "203.0.113.10", event.IPAddress)
+	require.Equal(t, "198.51.100.42", event.IPAddress)
 }
 
 func TestHandler_UpdatesJSON_NotifiesAuditor(t *testing.T) {
