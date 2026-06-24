@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Service описывает бизнес-логику обновления метрик,
+// MetricsUpdater описывает бизнес-логику обновления метрик,
 // используемую gRPC-Сервером.
-type Service interface {
+type MetricsUpdater interface {
 	// UpdateMetrics сохраняет набор метрик за одну операцию.
 	UpdateMetrics(context.Context, []model.Metrics) error
 }
@@ -29,7 +29,7 @@ type Auditor interface {
 type Server struct {
 	metricspb.UnimplementedMetricsServer
 
-	service Service
+	service MetricsUpdater
 	auditor Auditor
 	log     *zap.Logger
 }
@@ -37,7 +37,7 @@ type Server struct {
 var _ metricspb.MetricsServer = (*Server)(nil)
 
 // New создаёт gRPC-Сервер, использующий переданный сервис метрик.
-func New(service Service) *Server {
+func New(service MetricsUpdater) *Server {
 	return &Server{
 		service: service,
 		log:     zap.NewNop(),

@@ -14,7 +14,7 @@ import (
 )
 
 func newGRPCServer(
-	metricsService grpcserver.Service,
+	metricsService grpcserver.MetricsUpdater,
 	auditor *audit.Auditor,
 	trustedSubnet *net.IPNet,
 	log *zap.Logger,

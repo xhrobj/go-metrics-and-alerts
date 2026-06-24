@@ -310,3 +310,10 @@ func TestGRPCSenderCloseWithoutCloser(t *testing.T) {
 
 	require.NoError(t, sender.Close())
 }
+
+func TestNewGRPCSender(t *testing.T) {
+	sender, err := NewGRPCSender("localhost:50051")
+	require.NoError(t, err)
+
+	require.NoError(t, sender.Close())
+}

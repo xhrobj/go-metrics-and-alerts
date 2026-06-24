@@ -26,7 +26,7 @@ var defaultRetryDelays = []time.Duration{
 	5 * time.Second,
 }
 
-type metricsClient interface {
+type metricsUpdater interface {
 	UpdateMetrics(
 		context.Context,
 		*metricspb.UpdateMetricsRequest,
@@ -36,7 +36,7 @@ type metricsClient interface {
 
 // GRPCSender отправляет batch метрик на Сервер через gRPC.
 type GRPCSender struct {
-	client      metricsClient
+	client      metricsUpdater
 	closer      io.Closer
 	localIP     func() (string, error)
 	retryDelays []time.Duration
@@ -66,7 +66,7 @@ func NewGRPCSender(serverAddr string) (*GRPCSender, error) {
 }
 
 func newGRPCSender(
-	client metricsClient,
+	client metricsUpdater,
 	closer io.Closer,
 	localIP func() (string, error),
 ) *GRPCSender {
