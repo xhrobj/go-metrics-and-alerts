@@ -20,11 +20,11 @@ internal/
 
 ## Документация пакетов
 
-* [`internal/agent`](agent/README.md) - сбор, подготовка и отправка метрик
-* [`internal/server`](server/README.md) - запуск транспортов, обработка и хранение метрик
-* [`internal/encryption`](encryption/README.md) - гибридное шифрование и работа с RSA-ключами
-* [`internal/model`](model/README.md) - общая модель метрик
-* [`internal/repository`](repository/README.md) - хранилища и сохранение состояния
+- [`internal/agent`](agent/README.md) - сбор, подготовка и отправка метрик
+- [`internal/server`](server/README.md) - запуск транспортов, обработка и хранение метрик
+- [`internal/encryption`](encryption/README.md) - гибридное шифрование и работа с RSA-ключами
+- [`internal/model`](model/README.md) - общая модель метрик
+- [`internal/repository`](repository/README.md) - хранилища и сохранение состояния
 
 ## Сгенерированный код
 

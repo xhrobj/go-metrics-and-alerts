@@ -1,30 +1,43 @@
 # internal/encryption
 
-Пакет содержит загрузку RSA-ключей и гибридное шифрование сообщений с использованием RSA-OAEP и AES-GCM.
+Пакет загружает RSA-ключи из PEM-файлов и реализует гибридное шифрование сообщений с использованием RSA-OAEP и AES-GCM. Шифрование применяется при передаче метрик по HTTP.
 
 ## Схема шифрования
 
 Для каждого сообщения Агент:
 
-1. генерирует одноразовый AES-ключ
-2. шифрует данные через AES-GCM
-3. шифрует AES-ключ публичным RSA-ключом через RSA-OAEP
-4. объединяет зашифрованный ключ, nonce и ciphertext в транспортный payload
+1. генерирует случайный 256-битный AES-ключ
+2. создаёт случайный nonce необходимого для AES-GCM размера
+3. шифрует исходные данные с помощью AES-GCM
+4. шифрует AES-ключ публичным RSA-ключом через RSA-OAEP с SHA-256
+5. сериализует результат в JSON-конверт с полями `key`, `nonce` и `data`
 
-Сервер выполняет обратные операции приватным RSA-ключом.
+Сервер выполняет обратные операции: расшифровывает AES-ключ приватным RSA-ключом, а затем расшифровывает данные с помощью AES-GCM.
 
-Имя транспортного заголовка `Content-Encryption` объявлено в [`internal/protocol`](../protocol/README.md), а значение схемы `rsa-aes-gcm` остаётся в пакете `internal/encryption`.
+HTTP-транспорт обозначает зашифрованное тело заголовком `Content-Encryption` со значением `rsa-aes-gcm`. Имя заголовка объявлено в пакете `internal/protocol`, а значение схемы находится в пакете `internal/encryption`.
+
+## Форматы ключей
+
+Для публичных RSA-ключей поддерживаются форматы:
+
+- PKIX
+- PKCS#1
+
+Для приватных RSA-ключей поддерживаются форматы:
+
+- PKCS#8
+- PKCS#1
 
 ## Ключи для тестов
 
-Пакет `internal/encryption/testkeys` при каждом тесте:
+Функция `testkeys.Generate(t)` из пакета `internal/encryption/testkeys` при каждом вызове:
 
 - генерирует временную RSA-пару
 - записывает публичный ключ в формате PKIX
 - записывает приватный ключ в формате PKCS#8
-- сохраняет PEM-файлы в `t.TempDir()`
+- сохраняет PEM-файлы в каталоге, созданном через `t.TempDir()`
 
-Временные файлы автоматически удаляются после теста.
+Временные файлы автоматически удаляются после завершения теста.
 
 ## Ключи для локального запуска
 
@@ -32,7 +45,7 @@
 make crypto-keys
 ```
 
-Ключи сохраняются в игнорируемом Git каталоге:
+Команда при необходимости создаёт RSA-пару в каталоге `.keys/`, игнорируемом Git:
 
 ```text
 .keys/
@@ -52,26 +65,29 @@ make run-agent-crypto
 
 ## Ручная генерация ключей
 
+Создание каталога:
+
+```bash
+mkdir -p .keys
+```
+
 Приватный ключ:
 
 ```bash
-openssl genrsa   -out .keys/private.pem   2048
+openssl genrsa -out .keys/private.pem 2048
 ```
 
 Публичный ключ:
 
 ```bash
-openssl rsa   -in .keys/private.pem   -pubout   -out .keys/public.pem
+openssl rsa -in .keys/private.pem -pubout -out .keys/public.pem
 ```
 
 Проверка соответствия пары:
 
 ```bash
-openssl pkey   -in .keys/private.pem   -pubout   -outform DER |
-openssl sha256
-
-openssl pkey   -pubin   -in .keys/public.pem   -outform DER |
-openssl sha256
+openssl pkey -in .keys/private.pem -pubout -outform DER | openssl sha256
+openssl pkey -pubin -in .keys/public.pem -outform DER | openssl sha256
 ```
 
 Обе команды должны вывести одинаковый SHA-256.
