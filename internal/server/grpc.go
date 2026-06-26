@@ -19,9 +19,9 @@ func newGRPCServer(
 	trustedSubnet *net.IPNet,
 	log *zap.Logger,
 ) *grpc.Server {
-	transport := grpcserver.New(metricsService)
+	transport := grpcserver.New(metricsService, log)
 	if auditor != nil {
-		transport.EnableAudit(auditor, log)
+		transport.EnableAudit(auditor)
 	}
 
 	interceptors := []grpc.UnaryServerInterceptor{

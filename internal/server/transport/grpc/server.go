@@ -37,20 +37,20 @@ type Server struct {
 var _ metricspb.MetricsServer = (*Server)(nil)
 
 // New создаёт gRPC-Сервер, использующий переданный сервис метрик.
-func New(service MetricsUpdater) *Server {
+func New(service MetricsUpdater, log *zap.Logger) *Server {
+	if log == nil {
+		log = zap.NewNop()
+	}
+
 	return &Server{
 		service: service,
-		log:     zap.NewNop(),
+		log:     log,
 	}
 }
 
 // EnableAudit подключает аудит успешной обработки метрик.
-func (s *Server) EnableAudit(auditor Auditor, log *zap.Logger) {
+func (s *Server) EnableAudit(auditor Auditor) {
 	s.auditor = auditor
-
-	if log != nil {
-		s.log = log
-	}
 }
 
 // UpdateMetrics принимает и сохраняет батч метрик.
@@ -64,6 +64,8 @@ func (s *Server) UpdateMetrics(
 	}
 
 	if err := s.service.UpdateMetrics(ctx, metrics); err != nil {
+		s.log.Error("update metrics failed", zap.Error(err))
+
 		return nil, serviceError(err)
 	}
 

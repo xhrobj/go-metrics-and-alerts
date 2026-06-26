@@ -12,6 +12,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/audit"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -49,7 +50,7 @@ func (a *auditorStub) Notify(ctx context.Context, event audit.Event) error {
 
 func TestServerUpdateMetrics(t *testing.T) {
 	srv := &serviceStub{}
-	grpcServer := New(srv)
+	grpcServer := New(srv, zap.NewNop())
 
 	rq := metricspb.UpdateMetricsRequest_builder{
 		Metrics: []*metricspb.Metric{
@@ -94,7 +95,7 @@ func TestServerUpdateMetrics(t *testing.T) {
 
 func TestServerUpdateMetricsRejectsInvalidRequest(t *testing.T) {
 	srv := &serviceStub{}
-	grpcServer := New(srv)
+	grpcServer := New(srv, zap.NewNop())
 
 	rs, err := grpcServer.UpdateMetrics(context.Background(), nil)
 
@@ -146,7 +147,7 @@ func TestServerUpdateMetricsMapsServiceErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := &serviceStub{err: tt.err}
-			grpcServer := New(srv)
+			grpcServer := New(srv, zap.NewNop())
 			rq := metricspb.UpdateMetricsRequest_builder{}.Build()
 
 			rs, err := grpcServer.UpdateMetrics(context.Background(), rq)
@@ -159,11 +160,29 @@ func TestServerUpdateMetricsMapsServiceErrors(t *testing.T) {
 	}
 }
 
+func TestServerUpdateMetricsLogsServiceError(t *testing.T) {
+	wantErr := errors.New("repository unavailable")
+	srv := &serviceStub{err: wantErr}
+
+	core, observedLogs := observer.New(zap.ErrorLevel)
+	grpcServer := New(srv, zap.New(core))
+	rq := metricspb.UpdateMetricsRequest_builder{}.Build()
+
+	rs, err := grpcServer.UpdateMetrics(context.Background(), rq)
+
+	require.Nil(t, rs)
+	require.Equal(t, codes.Internal, status.Code(err))
+
+	entries := observedLogs.FilterMessage("update metrics failed").All()
+	require.Len(t, entries, 1)
+	require.Equal(t, wantErr.Error(), entries[0].ContextMap()["error"])
+}
+
 func TestServerUpdateMetricsNotifiesAuditor(t *testing.T) {
 	srv := &serviceStub{}
 	auditor := &auditorStub{}
-	grpcServer := New(srv)
-	grpcServer.EnableAudit(auditor, zap.NewNop())
+	grpcServer := New(srv, zap.NewNop())
+	grpcServer.EnableAudit(auditor)
 
 	ctx := metadata.NewIncomingContext(
 		context.Background(),
@@ -201,8 +220,8 @@ func TestServerUpdateMetricsNotifiesAuditor(t *testing.T) {
 func TestServerUpdateMetricsIgnoresAuditorError(t *testing.T) {
 	srv := &serviceStub{}
 	auditor := &auditorStub{err: errors.New("audit failed")}
-	grpcServer := New(srv)
-	grpcServer.EnableAudit(auditor, nil)
+	grpcServer := New(srv, zap.NewNop())
+	grpcServer.EnableAudit(auditor)
 
 	rq := metricspb.UpdateMetricsRequest_builder{
 		Metrics: []*metricspb.Metric{
@@ -252,8 +271,8 @@ func TestServerUpdateMetricsDoesNotNotifyAuditor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := &serviceStub{err: tt.srvErr}
 			auditor := &auditorStub{}
-			grpcServer := New(srv)
-			grpcServer.EnableAudit(auditor, zap.NewNop())
+			grpcServer := New(srv, zap.NewNop())
+			grpcServer.EnableAudit(auditor)
 
 			rs, err := grpcServer.UpdateMetrics(context.Background(), tt.rq)
 
