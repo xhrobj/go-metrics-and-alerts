@@ -42,13 +42,7 @@ func loadServerConfigFile(path string, cfg *ServerConfig) error {
 		cfg.GRPCAddr = *fileCfg.GRPCAddress
 	}
 
-	if fileCfg.GRPCTLSCert != nil {
-		cfg.GRPCTLSCert = *fileCfg.GRPCTLSCert
-	}
-
-	if fileCfg.GRPCTLSKey != nil {
-		cfg.GRPCTLSKey = *fileCfg.GRPCTLSKey
-	}
+	applyServerTLSFileConfig(cfg, fileCfg)
 
 	if fileCfg.StoreInterval != nil {
 		cfg.StoreIntervalInSec, err = parseStoreInterval(*fileCfg.StoreInterval)
@@ -90,6 +84,16 @@ func loadServerConfigFile(path string, cfg *ServerConfig) error {
 	}
 
 	return nil
+}
+
+func applyServerTLSFileConfig(cfg *ServerConfig, fileCfg serverFileConfig) {
+	if fileCfg.GRPCTLSCert != nil {
+		cfg.GRPCTLSCert = *fileCfg.GRPCTLSCert
+	}
+
+	if fileCfg.GRPCTLSKey != nil {
+		cfg.GRPCTLSKey = *fileCfg.GRPCTLSKey
+	}
 }
 
 func parseStoreInterval(value string) (int, error) {

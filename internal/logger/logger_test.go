@@ -43,12 +43,7 @@ func TestNew(t *testing.T) {
 
 			log, err := New()
 			if tt.wantError != "" {
-				if err == nil {
-					t.Fatal("New() error = nil, want error")
-				}
-				if !strings.Contains(err.Error(), tt.wantError) {
-					t.Fatalf("New() error = %q, want substring %q", err, tt.wantError)
-				}
+				assertNewError(t, err, tt.wantError)
 				return
 			}
 
@@ -66,5 +61,16 @@ func TestNew(t *testing.T) {
 				t.Fatalf("info enabled = %t, want %t", got, tt.wantInfo)
 			}
 		})
+	}
+}
+
+func assertNewError(t *testing.T, err error, wantError string) {
+	t.Helper()
+
+	if err == nil {
+		t.Fatal("New() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), wantError) {
+		t.Fatalf("New() error = %q, want substring %q", err, wantError)
 	}
 }

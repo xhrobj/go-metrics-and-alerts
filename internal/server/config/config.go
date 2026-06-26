@@ -210,13 +210,7 @@ func applyServerEnvironment(cfg *ServerConfig, lookupEnv lookupEnvFunc) error {
 		cfg.GRPCAddr = grpcAddr
 	}
 
-	if grpcTLSCert, ok := lookupEnv("GRPC_TLS_CERT"); ok {
-		cfg.GRPCTLSCert = grpcTLSCert
-	}
-
-	if grpcTLSKey, ok := lookupEnv("GRPC_TLS_KEY"); ok {
-		cfg.GRPCTLSKey = grpcTLSKey
-	}
+	applyServerTLSEnvironment(cfg, lookupEnv)
 
 	if storeIntervalInSec, ok, err := getEnvInt(lookupEnv, "STORE_INTERVAL"); err != nil {
 		return err
@@ -264,4 +258,14 @@ func applyServerEnvironment(cfg *ServerConfig, lookupEnv lookupEnvFunc) error {
 	}
 
 	return nil
+}
+
+func applyServerTLSEnvironment(cfg *ServerConfig, lookupEnv lookupEnvFunc) {
+	if grpcTLSCert, ok := lookupEnv("GRPC_TLS_CERT"); ok {
+		cfg.GRPCTLSCert = grpcTLSCert
+	}
+
+	if grpcTLSKey, ok := lookupEnv("GRPC_TLS_KEY"); ok {
+		cfg.GRPCTLSKey = grpcTLSKey
+	}
 }
