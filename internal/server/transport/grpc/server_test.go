@@ -12,6 +12,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 	"github.com/xhrobj/go-metrics-and-alerts/internal/server/audit"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -160,22 +161,55 @@ func TestServerUpdateMetricsMapsServiceErrors(t *testing.T) {
 	}
 }
 
-func TestServerUpdateMetricsLogsServiceError(t *testing.T) {
-	wantErr := errors.New("repository unavailable")
-	srv := &serviceStub{err: wantErr}
+func TestServerUpdateMetricsLogsServiceErrorByStatus(t *testing.T) {
+	tests := []struct {
+		name       string
+		serviceErr error
+		wantCode   codes.Code
+		wantLevel  zapcore.Level
+	}{
+		{
+			name:       "canceled",
+			serviceErr: context.Canceled,
+			wantCode:   codes.Canceled,
+			wantLevel:  zap.DebugLevel,
+		},
+		{
+			name:       "deadline exceeded",
+			serviceErr: context.DeadlineExceeded,
+			wantCode:   codes.DeadlineExceeded,
+			wantLevel:  zap.DebugLevel,
+		},
+		{
+			name:       "internal error",
+			serviceErr: errors.New("repository unavailable"),
+			wantCode:   codes.Internal,
+			wantLevel:  zap.ErrorLevel,
+		},
+	}
 
-	core, observedLogs := observer.New(zap.ErrorLevel)
-	grpcServer := New(srv, zap.New(core))
-	rq := metricspb.UpdateMetricsRequest_builder{}.Build()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := &serviceStub{err: tt.serviceErr}
+			core, observedLogs := observer.New(zap.DebugLevel)
+			grpcServer := New(srv, zap.New(core))
+			rq := metricspb.UpdateMetricsRequest_builder{}.Build()
 
-	rs, err := grpcServer.UpdateMetrics(context.Background(), rq)
+			rs, err := grpcServer.UpdateMetrics(context.Background(), rq)
 
-	require.Nil(t, rs)
-	require.Equal(t, codes.Internal, status.Code(err))
+			require.Nil(t, rs)
+			require.Equal(t, tt.wantCode, status.Code(err))
 
-	entries := observedLogs.FilterMessage("update metrics failed").All()
-	require.Len(t, entries, 1)
-	require.Equal(t, wantErr.Error(), entries[0].ContextMap()["error"])
+			entries := observedLogs.FilterMessage("update metrics failed").All()
+			require.Len(t, entries, 1)
+			require.Equal(t, tt.wantLevel, entries[0].Level)
+			require.Equal(
+				t,
+				tt.serviceErr.Error(),
+				entries[0].ContextMap()["error"],
+			)
+		})
+	}
 }
 
 func TestServerUpdateMetricsNotifiesAuditor(t *testing.T) {

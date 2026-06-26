@@ -128,7 +128,7 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 	return srv, nil
 }
 
-// Run запускает HTTP- и gRPC-Серверы и выполняет штатное завершение после отмены контекста.
+// Run запускает gRPC/HTTP-серверы и выполняет штатное завершение после отмены контекста.
 func (s *Server) Run(ctx context.Context) error {
 	s.log.Info("running server",
 		zap.String("httpAddress", s.cfg.HTTPAddr),

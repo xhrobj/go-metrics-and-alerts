@@ -64,9 +64,16 @@ func (s *Server) UpdateMetrics(
 	}
 
 	if err := s.service.UpdateMetrics(ctx, metrics); err != nil {
-		s.log.Error("update metrics failed", zap.Error(err))
+		grpcErr := serviceError(err)
+		fields := []zap.Field{zap.Error(err)}
 
-		return nil, serviceError(err)
+		if isServerErrorCode(status.Code(grpcErr)) {
+			s.log.Error("update metrics failed", fields...)
+		} else {
+			s.log.Debug("update metrics failed", fields...)
+		}
+
+		return nil, grpcErr
 	}
 
 	s.notifyAudit(ctx, metrics)

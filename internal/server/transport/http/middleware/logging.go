@@ -55,7 +55,8 @@ func (lw *loggingResponseWriter) Write(b []byte) (int, error) {
 //   - код статуса ответа
 //   - размер тела ответа
 //
-// Логирование выполняется с использованием zap.Logger на уровне Info.
+// Успешные ответы и ошибки клиента логируются на уровне Debug,
+// серверные ошибки — на уровне Error.
 func WithLogging(log *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -65,13 +66,19 @@ func WithLogging(log *zap.Logger) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(lw, r)
 
-			log.Info("http request completed",
+			fields := []zap.Field{
 				zap.String("uri", r.RequestURI),
 				zap.String("method", r.Method),
 				zap.Duration("duration", time.Since(start)),
 				zap.Int("status", lw.statusCode),
 				zap.Int("size", lw.size),
-			)
+			}
+
+			if lw.statusCode >= http.StatusInternalServerError {
+				log.Error("http request completed", fields...)
+			} else {
+				log.Debug("http request completed", fields...)
+			}
 		})
 	}
 }
