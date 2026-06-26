@@ -37,6 +37,41 @@ func (s *blockingMetricsServer) UpdateMetrics(
 	}
 }
 
+func TestNewGRPCServerRequiresCertificateAndKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		certPath string
+		keyPath  string
+	}{
+		{
+			name:     "certificate without private key",
+			certPath: "server.pem",
+		},
+		{
+			name:    "private key without certificate",
+			keyPath: "server-key.pem",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := newGRPCServer(
+				nil,
+				nil,
+				nil,
+				tt.certPath,
+				tt.keyPath,
+				zap.NewNop(),
+			)
+			require.ErrorContains(
+				t,
+				err,
+				"gRPC TLS certificate and private key paths must be specified together",
+			)
+		})
+	}
+}
+
 func TestServeGRPCWaitsForActiveRequest(t *testing.T) {
 	listener := bufconn.Listen(bufconnSize)
 	t.Cleanup(func() {

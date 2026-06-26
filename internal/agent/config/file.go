@@ -15,6 +15,7 @@ type agentFileConfig struct {
 	RateLimit      *int    `json:"rate_limit"`
 	Key            *string `json:"key"`
 	CryptoKey      *string `json:"crypto_key"`
+	GRPCTLSCA      *string `json:"grpc_tls_ca"`
 }
 
 func loadAgentConfigFile(path string, cfg *AgentConfig) error {
@@ -71,6 +72,10 @@ func loadAgentConfigFile(path string, cfg *AgentConfig) error {
 
 	if fileCfg.CryptoKey != nil {
 		cfg.CryptoKey = *fileCfg.CryptoKey
+	}
+
+	if fileCfg.GRPCTLSCA != nil {
+		cfg.GRPCTLSCA = *fileCfg.GRPCTLSCA
 	}
 
 	return nil

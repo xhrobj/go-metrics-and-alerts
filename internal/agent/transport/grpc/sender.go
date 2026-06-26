@@ -15,6 +15,7 @@ import (
 	"github.com/xhrobj/go-metrics-and-alerts/internal/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -45,14 +46,19 @@ type GRPCSender struct {
 var _ service.MetricsSender = (*GRPCSender)(nil)
 
 // NewGRPCSender создаёт gRPC-отправитель метрик и одно переиспользуемое соединение.
-func NewGRPCSender(serverAddr string) (*GRPCSender, error) {
+func NewGRPCSender(serverAddr, tlsCAPath string) (*GRPCSender, error) {
 	if serverAddr == "" {
 		return nil, fmt.Errorf("server address must not be empty")
 	}
 
+	transportCredentials, err := newTransportCredentials(tlsCAPath)
+	if err != nil {
+		return nil, err
+	}
+
 	conn, err := grpc.NewClient(
 		serverAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(transportCredentials),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create gRPC client: %w", err)
@@ -63,6 +69,26 @@ func NewGRPCSender(serverAddr string) (*GRPCSender, error) {
 		conn,
 		agenttransport.LocalIP,
 	), nil
+}
+
+func newTransportCredentials(tlsCAPath string) (credentials.TransportCredentials, error) {
+	if tlsCAPath == "" {
+		return insecure.NewCredentials(), nil
+	}
+
+	transportCredentials, err := credentials.NewClientTLSFromFile(
+		tlsCAPath,
+		"",
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"load gRPC TLS CA certificate %q: %w",
+			tlsCAPath,
+			err,
+		)
+	}
+
+	return transportCredentials, nil
 }
 
 func newGRPCSender(

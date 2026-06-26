@@ -1,4 +1,4 @@
-// Package service реализует прикладные сценарии Агента:
+// Package service реализует сценарии работы Агента:
 // сбор метрик, формирование отчётов и их отправку.
 package service
 
@@ -22,7 +22,7 @@ type Report struct {
 	PollCount int64
 }
 
-// ReportingService реализует прикладные сценарии Агента:
+// ReportingService реализует сценарии работы Агента:
 // сбор метрик, формирование batch-отчётов и их отправку.
 type ReportingService struct {
 	repo   AgentStorage

@@ -3,6 +3,7 @@ package grpctransport
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -56,6 +57,7 @@ func TestGRPCSenderSend(t *testing.T) {
 		require.Equal(t, []string{"192.168.1.42"}, md.Get(protocol.MetadataRealIP))
 
 		metrics := rq.GetMetrics()
+
 		require.Len(t, metrics, 2)
 		require.Equal(t, "Alloc", metrics[0].GetId())
 		require.Equal(t, metricspb.Metric_GAUGE, metrics[0].GetType())
@@ -266,10 +268,12 @@ func TestGRPCSenderSupportsConcurrentSend(t *testing.T) {
 	const goroutines = 42
 
 	var wg sync.WaitGroup
+
 	errCh := make(chan error, goroutines)
 
 	for range goroutines {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
 			errCh <- sender.Send(context.Background(), []model.Metrics{{
@@ -301,8 +305,17 @@ func TestGRPCSenderClose(t *testing.T) {
 }
 
 func TestNewGRPCSenderRejectsEmptyAddress(t *testing.T) {
-	_, err := NewGRPCSender("")
+	_, err := NewGRPCSender("", "")
+
 	require.ErrorContains(t, err, "server address")
+}
+
+func TestNewGRPCSenderReturnsTLSCAError(t *testing.T) {
+	tlsCAPath := filepath.Join(t.TempDir(), "missing-ca.pem")
+
+	_, err := NewGRPCSender("localhost:50051", tlsCAPath)
+
+	require.ErrorContains(t, err, "load gRPC TLS CA certificate")
 }
 
 func TestGRPCSenderCloseWithoutCloser(t *testing.T) {
@@ -312,8 +325,8 @@ func TestGRPCSenderCloseWithoutCloser(t *testing.T) {
 }
 
 func TestNewGRPCSender(t *testing.T) {
-	sender, err := NewGRPCSender("localhost:50051")
-	require.NoError(t, err)
+	sender, err := NewGRPCSender("localhost:50051", "")
 
+	require.NoError(t, err)
 	require.NoError(t, sender.Close())
 }

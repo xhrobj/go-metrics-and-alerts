@@ -11,15 +11,28 @@ import (
 	grpcserver "github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/grpc"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 func newGRPCServer(
 	metricsService grpcserver.MetricsUpdater,
 	auditor *audit.Auditor,
 	trustedSubnet *net.IPNet,
+	tlsCertPath string,
+	tlsKeyPath string,
 	log *zap.Logger,
-) *grpc.Server {
+) (*grpc.Server, error) {
+	hasCert := tlsCertPath != ""
+	hasKey := tlsKeyPath != ""
+
+	if hasCert != hasKey {
+		return nil, fmt.Errorf(
+			"gRPC TLS certificate and private key paths must be specified together",
+		)
+	}
+
 	transport := grpcserver.New(metricsService, log)
+
 	if auditor != nil {
 		transport.EnableAudit(auditor)
 	}
@@ -27,6 +40,7 @@ func newGRPCServer(
 	interceptors := []grpc.UnaryServerInterceptor{
 		grpcserver.LoggingInterceptor(log),
 	}
+
 	if trustedSubnet != nil {
 		interceptors = append(
 			interceptors,
@@ -34,13 +48,32 @@ func newGRPCServer(
 		)
 	}
 
-	srv := grpc.NewServer(
+	options := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(interceptors...),
-	)
+	}
+
+	if hasCert {
+		transportCredentials, err := credentials.NewServerTLSFromFile(
+			tlsCertPath,
+			tlsKeyPath,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"load gRPC TLS certificate %q and private key %q: %w",
+				tlsCertPath,
+				tlsKeyPath,
+				err,
+			)
+		}
+
+		options = append(options, grpc.Creds(transportCredentials))
+	}
+
+	srv := grpc.NewServer(options...)
 
 	metricspb.RegisterMetricsServer(srv, transport)
 
-	return srv
+	return srv, nil
 }
 
 func serveGRPC(
@@ -60,9 +93,7 @@ func serveGRPC(
 		if errors.Is(err, grpc.ErrServerStopped) {
 			return nil
 		}
-
 		return err
-
 	case <-ctx.Done():
 		log.Info("shutdown signal received", zap.String("transport", "gRPC"))
 	}
@@ -95,7 +126,6 @@ func stopGRPC(ctx context.Context, srv *grpc.Server) error {
 	select {
 	case <-doneCh:
 		return nil
-
 	case <-ctx.Done():
 		select {
 		case <-doneCh:

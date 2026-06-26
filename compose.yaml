@@ -26,14 +26,18 @@ services:
     environment:
       ADDRESS: ":8080"
       GRPC_ADDRESS: ":50051"
+      GRPC_TLS_CERT: /run/secrets/grpc_server_cert
+      GRPC_TLS_KEY: /run/secrets/grpc_server_key
       DATABASE_DSN: "postgres://${POSTGRES_USER:-metrics}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-metricsdb}?sslmode=disable"
       KEY: ${SECRET_KEY:-god}
-      CRYPTO_KEY: /run/secrets/server_private_key
+      CRYPTO_KEY: /run/secrets/http_crypto_private_key
     ports:
       - "8080:8080"
       - "50051:50051"
     secrets:
-      - server_private_key
+      - http_crypto_private_key
+      - grpc_server_cert
+      - grpc_server_key
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,13 +63,15 @@ services:
     environment:
       ADDRESS: ${AGENT_ADDRESS:-server:50051}
       TRANSPORT: ${AGENT_TRANSPORT:-grpc}
+      GRPC_TLS_CA: /run/secrets/grpc_ca_cert
       POLL_INTERVAL: 2
       REPORT_INTERVAL: 5
       RATE_LIMIT: ${RATE_LIMIT:-3}
       KEY: ${SECRET_KEY:-god}
-      CRYPTO_KEY: /run/secrets/agent_public_key
+      CRYPTO_KEY: /run/secrets/http_crypto_public_key
     secrets:
-      - agent_public_key
+      - http_crypto_public_key
+      - grpc_ca_cert
     depends_on:
       server:
         condition: service_healthy
@@ -75,7 +81,13 @@ volumes:
   postgres-data:
 
 secrets:
-  server_private_key:
-    file: ./.keys/private.pem
-  agent_public_key:
-    file: ./.keys/public.pem
+  http_crypto_private_key:
+    file: ./.keys/http-crypto-private.pem
+  http_crypto_public_key:
+    file: ./.keys/http-crypto-public.pem
+  grpc_server_cert:
+    file: ./.certs/grpc-server.pem
+  grpc_server_key:
+    file: ./.certs/grpc-server-key.pem
+  grpc_ca_cert:
+    file: ./.certs/grpc-ca.pem

@@ -15,6 +15,15 @@ func validateServerConfig(cfg ServerConfig) error {
 		return fmt.Errorf("gRPC server address must not be empty")
 	}
 
+	hasCert := cfg.GRPCTLSCert != ""
+	hasKey := cfg.GRPCTLSKey != ""
+
+	if hasCert != hasKey {
+		return fmt.Errorf(
+			"gRPC TLS certificate and private key paths must be specified together",
+		)
+	}
+
 	if cfg.StoreIntervalInSec < 0 {
 		return fmt.Errorf(
 			"store interval in seconds must be >= 0, got %d",

@@ -29,6 +29,7 @@ func TestParseAgentConfig(t *testing.T) {
 			args: []string{
 				"-a", "agent:8081",
 				"--transport", "http",
+				"--grpc-tls-ca", "flag-ca.pem",
 				"-p", "3",
 				"-r", "11",
 				"-l", "7",
@@ -38,6 +39,7 @@ func TestParseAgentConfig(t *testing.T) {
 			want: AgentConfig{
 				ServerAddr:          "agent:8081",
 				Transport:           TransportHTTP,
+				GRPCTLSCA:           "flag-ca.pem",
 				PollIntervalInSec:   3,
 				ReportIntervalInSec: 11,
 				RateLimit:           7,
@@ -50,6 +52,7 @@ func TestParseAgentConfig(t *testing.T) {
 			args: []string{
 				"-a", "flag-agent:8081",
 				"--transport", "grpc",
+				"--grpc-tls-ca", "flag-ca.pem",
 				"-p", "3",
 				"-r", "11",
 				"-l", "7",
@@ -59,6 +62,7 @@ func TestParseAgentConfig(t *testing.T) {
 			env: map[string]string{
 				"ADDRESS":         "env-agent:8082",
 				"TRANSPORT":       "http",
+				"GRPC_TLS_CA":     "env-ca.pem",
 				"POLL_INTERVAL":   "4",
 				"REPORT_INTERVAL": "12",
 				"RATE_LIMIT":      "8",
@@ -68,6 +72,7 @@ func TestParseAgentConfig(t *testing.T) {
 			want: AgentConfig{
 				ServerAddr:          "env-agent:8082",
 				Transport:           TransportHTTP,
+				GRPCTLSCA:           "env-ca.pem",
 				PollIntervalInSec:   4,
 				ReportIntervalInSec: 12,
 				RateLimit:           8,
@@ -95,6 +100,7 @@ func TestParseAgentConfigFromFile(t *testing.T) {
 	configPath := writeAgentConfigFile(t, `{
 		"address": "json-agent:8083",
 		"transport": "http",
+		"grpc_tls_ca": "json-ca.pem",
 		"poll_interval": "3s",
 		"report_interval": "11s",
 		"rate_limit": 7,
@@ -113,6 +119,7 @@ func TestParseAgentConfigFromFile(t *testing.T) {
 	want := AgentConfig{
 		ServerAddr:          "json-agent:8083",
 		Transport:           TransportHTTP,
+		GRPCTLSCA:           "json-ca.pem",
 		PollIntervalInSec:   3,
 		ReportIntervalInSec: 11,
 		RateLimit:           7,
@@ -155,6 +162,7 @@ func TestParseAgentConfigFlagsOverrideFile(t *testing.T) {
 	configPath := writeAgentConfigFile(t, `{
 		"address": "json-agent:8083",
 		"transport": "grpc",
+		"grpc_tls_ca": "json-ca.pem",
 		"poll_interval": "3s",
 		"report_interval": "11s",
 		"rate_limit": 7,
@@ -167,6 +175,7 @@ func TestParseAgentConfigFlagsOverrideFile(t *testing.T) {
 			"--config", configPath,
 			"-a", "flag-agent:8084",
 			"--transport", "http",
+			"--grpc-tls-ca", "flag-ca.pem",
 			"-p", "4",
 			"-r", "12",
 			"-l", "8",
@@ -182,6 +191,7 @@ func TestParseAgentConfigFlagsOverrideFile(t *testing.T) {
 	want := AgentConfig{
 		ServerAddr:          "flag-agent:8084",
 		Transport:           TransportHTTP,
+		GRPCTLSCA:           "flag-ca.pem",
 		PollIntervalInSec:   4,
 		ReportIntervalInSec: 12,
 		RateLimit:           8,
@@ -198,6 +208,7 @@ func TestParseAgentConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 	configPath := writeAgentConfigFile(t, `{
 		"address": "json-agent:8083",
 		"transport": "grpc",
+		"grpc_tls_ca": "json-ca.pem",
 		"poll_interval": "3s",
 		"report_interval": "11s",
 		"rate_limit": 7,
@@ -210,6 +221,7 @@ func TestParseAgentConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 			"--config", configPath,
 			"-a", "flag-agent:8084",
 			"--transport", "http",
+			"--grpc-tls-ca", "flag-ca.pem",
 			"-p", "4",
 			"-r", "12",
 			"-l", "8",
@@ -219,6 +231,7 @@ func TestParseAgentConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 		testLookupEnv(map[string]string{
 			"ADDRESS":         "env-agent:8085",
 			"TRANSPORT":       "grpc",
+			"GRPC_TLS_CA":     "env-ca.pem",
 			"POLL_INTERVAL":   "5",
 			"REPORT_INTERVAL": "15",
 			"RATE_LIMIT":      "9",
@@ -233,6 +246,7 @@ func TestParseAgentConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 	want := AgentConfig{
 		ServerAddr:          "env-agent:8085",
 		Transport:           TransportGRPC,
+		GRPCTLSCA:           "env-ca.pem",
 		PollIntervalInSec:   5,
 		ReportIntervalInSec: 15,
 		RateLimit:           9,

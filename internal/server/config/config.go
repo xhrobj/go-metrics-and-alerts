@@ -13,6 +13,14 @@ type ServerConfig struct {
 	// GRPCAddr - адрес и порт запуска gRPC-Сервера.
 	GRPCAddr string
 
+	// GRPCTLSCert - путь к сертификату gRPC-Сервера.
+	// Если оба TLS-пути не заданы, gRPC-Сервер запускается без TLS.
+	GRPCTLSCert string
+
+	// GRPCTLSKey - путь к приватному ключу сертификата gRPC-Сервера.
+	// Для включения TLS должен задаваться вместе с GRPCTLSCert.
+	GRPCTLSKey string
+
 	// StoreIntervalInSec - интервал сохранения метрик на диск в секундах.
 	StoreIntervalInSec int
 
@@ -49,10 +57,12 @@ type ServerConfig struct {
 // GetServerConfig возвращает конфигурацию Сервера.
 //
 // Значения параметров могут быть заданы через:
-//   - флаги: -a -g -i -f -r -d -k --crypto-key -t --audit-file --audit-url -c/--config
+//   - флаги: -a -g --grpc-tls-cert --grpc-tls-key -i -f -r -d -k --crypto-key -t --audit-file --audit-url -c/--config
 //   - переменные окружения:
 //     ADDRESS,
 //     GRPC_ADDRESS,
+//     GRPC_TLS_CERT,
+//     GRPC_TLS_KEY,
 //     STORE_INTERVAL,
 //     FILE_STORAGE_PATH / STORE_FILE,
 //     RESTORE,
@@ -78,6 +88,8 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 
 	flags.StringVar(&flagCfg.HTTPAddr, "a", flagCfg.HTTPAddr, "address and port to run HTTP server")
 	flags.StringVar(&flagCfg.GRPCAddr, "g", flagCfg.GRPCAddr, "address and port to run gRPC server")
+	flags.StringVar(&flagCfg.GRPCTLSCert, "grpc-tls-cert", flagCfg.GRPCTLSCert, "path to gRPC TLS server certificate")
+	flags.StringVar(&flagCfg.GRPCTLSKey, "grpc-tls-key", flagCfg.GRPCTLSKey, "path to gRPC TLS server private key")
 	flags.IntVar(&flagCfg.StoreIntervalInSec, "i", flagCfg.StoreIntervalInSec, "store interval in seconds")
 	flags.StringVar(&flagCfg.FileStoragePath, "f", flagCfg.FileStoragePath, "path to metrics storage file")
 	flags.BoolVar(&flagCfg.Restore, "r", flagCfg.Restore, "restore metrics from file on startup")
@@ -89,6 +101,7 @@ func parseServerConfig(args []string, lookupEnv lookupEnvFunc) (ServerConfig, er
 	flags.StringVar(&flagCfg.AuditURL, "audit-url", flagCfg.AuditURL, "audit receiver URL")
 
 	var configPath string
+
 	flags.StringVar(&configPath, "c", "", "path to JSON configuration file")
 	flags.StringVar(&configPath, "config", "", "path to JSON configuration file")
 
@@ -143,6 +156,14 @@ func applyServerFlags(cfg *ServerConfig, flagCfg ServerConfig, setFlags map[stri
 		cfg.GRPCAddr = flagCfg.GRPCAddr
 	}
 
+	if setFlags["grpc-tls-cert"] {
+		cfg.GRPCTLSCert = flagCfg.GRPCTLSCert
+	}
+
+	if setFlags["grpc-tls-key"] {
+		cfg.GRPCTLSKey = flagCfg.GRPCTLSKey
+	}
+
 	if setFlags["i"] {
 		cfg.StoreIntervalInSec = flagCfg.StoreIntervalInSec
 	}
@@ -187,6 +208,14 @@ func applyServerEnvironment(cfg *ServerConfig, lookupEnv lookupEnvFunc) error {
 
 	if grpcAddr, ok := lookupEnv("GRPC_ADDRESS"); ok {
 		cfg.GRPCAddr = grpcAddr
+	}
+
+	if grpcTLSCert, ok := lookupEnv("GRPC_TLS_CERT"); ok {
+		cfg.GRPCTLSCert = grpcTLSCert
+	}
+
+	if grpcTLSKey, ok := lookupEnv("GRPC_TLS_KEY"); ok {
+		cfg.GRPCTLSKey = grpcTLSKey
 	}
 
 	if storeIntervalInSec, ok, err := getEnvInt(lookupEnv, "STORE_INTERVAL"); err != nil {

@@ -25,22 +25,26 @@ const shutdownTimeout = time.Second * 30
 type Server struct {
 	cfg config.ServerConfig
 	log *zap.Logger
-	db  *sql.DB
+
+	db *sql.DB
 
 	httpServer   *http.Server
 	httpListener net.Listener
+
 	grpcServer   *grpc.Server
 	grpcListener net.Listener
 
 	shutdownPersistence func() error
 	persistenceOnce     sync.Once
 	persistenceErr      error
-	auditor             *audit.Auditor
-	cleanupAudit        func()
-	closeOnce           sync.Once
+
+	auditor      *audit.Auditor
+	cleanupAudit func()
+
+	closeOnce sync.Once
 }
 
-// New создаёт Сервер, настраивает зависимости и открывает HTTP- и gRPC-listener'ы.
+// New создаёт Сервер, настраивает зависимости и открывает HTTP/gRPC-listener'ы.
 func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 	if log == nil {
 		log = zap.NewNop()
@@ -80,6 +84,7 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 	}
 
 	repo, memRepo := newMetricsStorage(srv.db)
+
 	metricsService := service.NewMetricsService(repo)
 
 	srv.auditor, srv.cleanupAudit, err = setupAudit(cfg, log)
@@ -88,6 +93,7 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 	}
 
 	h := handler.New(metricsService, srv.db)
+
 	if srv.auditor != nil {
 		h.EnableAudit(srv.auditor, log)
 	}
@@ -103,12 +109,17 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 		Handler: httpHandler,
 	}
 
-	srv.grpcServer = newGRPCServer(
+	srv.grpcServer, err = newGRPCServer(
 		metricsService,
 		srv.auditor,
 		trustedSubnet,
+		cfg.GRPCTLSCert,
+		cfg.GRPCTLSKey,
 		log,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	srv.httpListener, err = net.Listen("tcp", cfg.HTTPAddr)
 	if err != nil {
@@ -120,7 +131,12 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 		return nil, fmt.Errorf("listen gRPC: %w", err)
 	}
 
-	srv.shutdownPersistence, err = setupFilePersistence(cfg, metricsService, memRepo, log)
+	srv.shutdownPersistence, err = setupFilePersistence(
+		cfg,
+		metricsService,
+		memRepo,
+		log,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -130,9 +146,10 @@ func New(cfg config.ServerConfig, log *zap.Logger) (_ *Server, err error) {
 
 // Run запускает gRPC/HTTP-серверы и выполняет штатное завершение после отмены контекста.
 func (s *Server) Run(ctx context.Context) error {
-	s.log.Info("running server",
+	s.log.Info("(^_^) running Server",
 		zap.String("httpAddress", s.cfg.HTTPAddr),
 		zap.String("grpcAddress", s.cfg.GRPCAddr),
+		zap.Bool("grpcTLS", s.cfg.GRPCTLSCert != ""),
 		zap.String("fileStoragePath", s.cfg.FileStoragePath),
 		zap.Bool("restore", s.cfg.Restore),
 		zap.Int("storeIntervalInSec", s.cfg.StoreIntervalInSec),
@@ -146,8 +163,8 @@ func (s *Server) Run(ctx context.Context) error {
 		s.grpcListener,
 		s.log,
 	)
-	persistenceErr := s.stopPersistence()
 
+	persistenceErr := s.stopPersistence()
 	if serveErr == nil && persistenceErr == nil {
 		s.log.Info("server stopped")
 	}

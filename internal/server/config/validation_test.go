@@ -17,6 +17,13 @@ func TestValidateServerConfig(t *testing.T) {
 			name: "valid",
 		},
 		{
+			name: "valid gRPC TLS configuration",
+			change: func(cfg *ServerConfig) {
+				cfg.GRPCTLSCert = "server.pem"
+				cfg.GRPCTLSKey = "server-key.pem"
+			},
+		},
+		{
 			name: "empty HTTP server address",
 			change: func(cfg *ServerConfig) {
 				cfg.HTTPAddr = ""
@@ -29,6 +36,20 @@ func TestValidateServerConfig(t *testing.T) {
 				cfg.GRPCAddr = ""
 			},
 			wantError: "gRPC server address",
+		},
+		{
+			name: "gRPC TLS certificate without private key",
+			change: func(cfg *ServerConfig) {
+				cfg.GRPCTLSCert = "server.pem"
+			},
+			wantError: "gRPC TLS certificate and private key",
+		},
+		{
+			name: "gRPC TLS private key without certificate",
+			change: func(cfg *ServerConfig) {
+				cfg.GRPCTLSKey = "server-key.pem"
+			},
+			wantError: "gRPC TLS certificate and private key",
 		},
 		{
 			name: "negative store interval",

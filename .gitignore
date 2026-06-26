@@ -39,10 +39,13 @@ __MACOSX/
 .env.*
 !.env.example
 
-# RSA-ключи для запуска Агента/Сервера
+# RSA-ключи шифрования HTTP-запросов
 /.keys/
 
-# JSON-конфиги Агента и Сервера (разрешены только два example-конфига)
+# сертификаты и ключи gRPC TLS
+/.certs/
+
+# JSON-конфиги Агента и Сервера (разрешена только пара example-конфигов)
 /configs/*
 !/configs/agent.example.json
 !/configs/server.example.json

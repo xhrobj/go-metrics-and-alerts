@@ -28,6 +28,8 @@ func TestParseServerConfig(t *testing.T) {
 			args: []string{
 				"-a", "server:8081",
 				"-g", "grpc-server:3201",
+				"--grpc-tls-cert", "flag-cert.pem",
+				"--grpc-tls-key", "flag-tls-key.pem",
 				"-i", "60",
 				"-f", "metrics.json",
 				"-r",
@@ -41,6 +43,8 @@ func TestParseServerConfig(t *testing.T) {
 			want: ServerConfig{
 				HTTPAddr:           "server:8081",
 				GRPCAddr:           "grpc-server:3201",
+				GRPCTLSCert:        "flag-cert.pem",
+				GRPCTLSKey:         "flag-tls-key.pem",
 				StoreIntervalInSec: 60,
 				FileStoragePath:    "metrics.json",
 				Restore:            true,
@@ -57,6 +61,8 @@ func TestParseServerConfig(t *testing.T) {
 			args: []string{
 				"-a", "flag-server:8081",
 				"-g", "flag-grpc:3201",
+				"--grpc-tls-cert", "flag-cert.pem",
+				"--grpc-tls-key", "flag-tls-key.pem",
 				"-i", "60",
 				"-f", "flag-metrics.json",
 				"-r=false",
@@ -70,6 +76,8 @@ func TestParseServerConfig(t *testing.T) {
 			env: map[string]string{
 				"ADDRESS":           "env-server:8082",
 				"GRPC_ADDRESS":      "env-grpc:3202",
+				"GRPC_TLS_CERT":     "env-cert.pem",
+				"GRPC_TLS_KEY":      "env-tls-key.pem",
 				"STORE_INTERVAL":    "120",
 				"FILE_STORAGE_PATH": "env-metrics.json",
 				"RESTORE":           "true",
@@ -83,6 +91,8 @@ func TestParseServerConfig(t *testing.T) {
 			want: ServerConfig{
 				HTTPAddr:           "env-server:8082",
 				GRPCAddr:           "env-grpc:3202",
+				GRPCTLSCert:        "env-cert.pem",
+				GRPCTLSKey:         "env-tls-key.pem",
 				StoreIntervalInSec: 120,
 				FileStoragePath:    "env-metrics.json",
 				Restore:            true,
@@ -127,6 +137,8 @@ func TestParseServerConfigFromFile(t *testing.T) {
 	configPath := writeServerConfigFile(t, `{
 		"address": "json-server:8083",
 		"grpc_address": "json-grpc:3203",
+		"grpc_tls_cert": "json-cert.pem",
+		"grpc_tls_key": "json-tls-key.pem",
 		"store_interval": "45s",
 		"store_file": "json-metrics.json",
 		"restore": true,
@@ -149,6 +161,8 @@ func TestParseServerConfigFromFile(t *testing.T) {
 	want := ServerConfig{
 		HTTPAddr:           "json-server:8083",
 		GRPCAddr:           "json-grpc:3203",
+		GRPCTLSCert:        "json-cert.pem",
+		GRPCTLSKey:         "json-tls-key.pem",
 		StoreIntervalInSec: 45,
 		FileStoragePath:    "json-metrics.json",
 		Restore:            true,
@@ -194,6 +208,8 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 	configPath := writeServerConfigFile(t, `{
 		"address": "json-server:8083",
 		"grpc_address": "json-grpc:3203",
+		"grpc_tls_cert": "json-cert.pem",
+		"grpc_tls_key": "json-tls-key.pem",
 		"store_interval": "45s",
 		"store_file": "json-metrics.json",
 		"restore": true,
@@ -209,6 +225,8 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 		[]string{
 			"-a", "flag-server:8084",
 			"-g", "flag-grpc:3204",
+			"--grpc-tls-cert", "flag-cert.pem",
+			"--grpc-tls-key", "flag-tls-key.pem",
 			"-i", "60",
 			"-f", "flag-metrics.json",
 			"-r=false",
@@ -229,6 +247,8 @@ func TestParseServerConfigFlagsOverrideFile(t *testing.T) {
 	want := ServerConfig{
 		HTTPAddr:           "flag-server:8084",
 		GRPCAddr:           "flag-grpc:3204",
+		GRPCTLSCert:        "flag-cert.pem",
+		GRPCTLSKey:         "flag-tls-key.pem",
 		StoreIntervalInSec: 60,
 		FileStoragePath:    "flag-metrics.json",
 		Restore:            false,
@@ -249,6 +269,8 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 	configPath := writeServerConfigFile(t, `{
 		"address": "json-server:8083",
 		"grpc_address": "json-grpc:3203",
+		"grpc_tls_cert": "json-cert.pem",
+		"grpc_tls_key": "json-tls-key.pem",
 		"store_interval": "45s",
 		"store_file": "json-metrics.json",
 		"restore": false,
@@ -264,6 +286,8 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 		[]string{
 			"-a", "flag-server:8084",
 			"-g", "flag-grpc:3204",
+			"--grpc-tls-cert", "flag-cert.pem",
+			"--grpc-tls-key", "flag-tls-key.pem",
 			"-i", "60",
 			"-f", "flag-metrics.json",
 			"-r=false",
@@ -278,6 +302,8 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 		testLookupEnv(map[string]string{
 			"ADDRESS":        "env-server:8085",
 			"GRPC_ADDRESS":   "env-grpc:3205",
+			"GRPC_TLS_CERT":  "env-cert.pem",
+			"GRPC_TLS_KEY":   "env-tls-key.pem",
 			"STORE_INTERVAL": "120",
 			"STORE_FILE":     "env-metrics.json",
 			"RESTORE":        "true",
@@ -296,6 +322,8 @@ func TestParseServerConfigEnvironmentOverridesFileAndFlags(t *testing.T) {
 	want := ServerConfig{
 		HTTPAddr:           "env-server:8085",
 		GRPCAddr:           "env-grpc:3205",
+		GRPCTLSCert:        "env-cert.pem",
+		GRPCTLSKey:         "env-tls-key.pem",
 		StoreIntervalInSec: 120,
 		FileStoragePath:    "env-metrics.json",
 		Restore:            true,

@@ -10,6 +10,8 @@ import (
 type serverFileConfig struct {
 	Address       *string `json:"address"`
 	GRPCAddress   *string `json:"grpc_address"`
+	GRPCTLSCert   *string `json:"grpc_tls_cert"`
+	GRPCTLSKey    *string `json:"grpc_tls_key"`
 	StoreInterval *string `json:"store_interval"`
 	StoreFile     *string `json:"store_file"`
 	Restore       *bool   `json:"restore"`
@@ -28,7 +30,6 @@ func loadServerConfigFile(path string, cfg *ServerConfig) error {
 	}
 
 	var fileCfg serverFileConfig
-
 	if err := json.Unmarshal(data, &fileCfg); err != nil {
 		return fmt.Errorf("decode server config file %q: %w", path, err)
 	}
@@ -39,6 +40,14 @@ func loadServerConfigFile(path string, cfg *ServerConfig) error {
 
 	if fileCfg.GRPCAddress != nil {
 		cfg.GRPCAddr = *fileCfg.GRPCAddress
+	}
+
+	if fileCfg.GRPCTLSCert != nil {
+		cfg.GRPCTLSCert = *fileCfg.GRPCTLSCert
+	}
+
+	if fileCfg.GRPCTLSKey != nil {
+		cfg.GRPCTLSKey = *fileCfg.GRPCTLSKey
 	}
 
 	if fileCfg.StoreInterval != nil {

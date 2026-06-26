@@ -88,10 +88,21 @@ func run(ctx context.Context) (err error) {
 }
 
 func logAgentStart(log *zap.Logger, cfg config.AgentConfig) {
-	log.Info("running agent",
+	log.Info("(^_^) running Agent",
 		zap.String("transport", string(cfg.Transport)),
 		zap.String("address", cfg.ServerAddr),
+		zap.Bool(
+			"grpcTLS",
+			cfg.Transport == config.TransportGRPC && cfg.GRPCTLSCA != "",
+		),
 	)
+
+	if cfg.Transport == config.TransportGRPC && cfg.GRPCTLSCA == "" {
+		log.Warn(
+			"(о_0) gRPC transport is running without TLS",
+			zap.String("address", cfg.ServerAddr),
+		)
+	}
 }
 
 func newMetricsSender(
@@ -99,13 +110,15 @@ func newMetricsSender(
 ) (service.MetricsSender, func() error, error) {
 	switch cfg.Transport {
 	case config.TransportGRPC:
-		sender, err := grpctransport.NewGRPCSender(cfg.ServerAddr)
+		sender, err := grpctransport.NewGRPCSender(
+			cfg.ServerAddr,
+			cfg.GRPCTLSCA,
+		)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		return sender, sender.Close, nil
-
 	case config.TransportHTTP:
 		sender, err := httptransport.NewHTTPSender(
 			cfg.ServerAddr,
@@ -117,7 +130,6 @@ func newMetricsSender(
 		}
 
 		return sender, func() error { return nil }, nil
-
 	default:
 		return nil, nil, fmt.Errorf("unsupported transport %q", cfg.Transport)
 	}
