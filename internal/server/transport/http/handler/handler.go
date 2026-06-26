@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination=mocks/mock_service.go -package=mocks github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler Service
+//go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination=mocks/mock_service.gen.go -package=mocks github.com/xhrobj/go-metrics-and-alerts/internal/server/transport/http/handler Service
 
 // Service описывает бизнес-логику работы с метриками,
 // используемую HTTP-обработчиками.
