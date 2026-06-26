@@ -29,11 +29,6 @@ func TestTrustedSubnetInterceptor(t *testing.T) {
 		wantCalled  bool
 	}{
 		{
-			name:       "disabled without subnet",
-			wantCode:   codes.OK,
-			wantCalled: true,
-		},
-		{
 			name:        "allows IPv4 from trusted subnet",
 			subnet:      trustedIPv4,
 			hasMetadata: true,
@@ -94,9 +89,10 @@ func TestTrustedSubnetInterceptor(t *testing.T) {
 
 			interceptor := TrustedSubnetInterceptor(tt.subnet)
 			rq := "request"
-			rs, err := interceptor(ctx, rq, &grpc.UnaryServerInfo{}, handler)
 
+			rs, err := interceptor(ctx, rq, &grpc.UnaryServerInfo{}, handler)
 			gotCode := status.Code(err)
+
 			require.Equal(t, tt.wantCode, gotCode, "got code %s, want %s", gotCode, tt.wantCode)
 			require.Equal(t, tt.wantCalled, called, "got called %t, want %t", called, tt.wantCalled)
 
@@ -118,12 +114,14 @@ func TestTrustedSubnetInterceptorPreservesHandlerError(t *testing.T) {
 		context.Background(),
 		metadata.Pairs(protocol.MetadataRealIP, "192.168.1.42"),
 	)
+
 	wantErr := status.Error(codes.Internal, "update failed")
 	handler := func(context.Context, any) (any, error) {
 		return nil, wantErr
 	}
 
 	interceptor := TrustedSubnetInterceptor(trustedSubnet)
+
 	rs, err := interceptor(ctx, struct{}{}, &grpc.UnaryServerInfo{}, handler)
 
 	require.Nil(t, rs)

@@ -24,12 +24,20 @@ func newGRPCServer(
 		transport.EnableAudit(auditor, log)
 	}
 
-	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			grpcserver.LoggingInterceptor(log),
+	interceptors := []grpc.UnaryServerInterceptor{
+		grpcserver.LoggingInterceptor(log),
+	}
+	if trustedSubnet != nil {
+		interceptors = append(
+			interceptors,
 			grpcserver.TrustedSubnetInterceptor(trustedSubnet),
-		),
+		)
+	}
+
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(interceptors...),
 	)
+
 	metricspb.RegisterMetricsServer(srv, transport)
 
 	return srv

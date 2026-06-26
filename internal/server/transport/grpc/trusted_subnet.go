@@ -10,13 +10,8 @@ import (
 )
 
 // TrustedSubnetInterceptor разрешает RPC только для IP-адресов из доверенной подсети.
-// Если подсеть не задана, проверка отключена.
 func TrustedSubnetInterceptor(subnet *net.IPNet) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, rq any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if subnet == nil {
-			return handler(ctx, rq)
-		}
-
 		realIP, ok := realIPFromContext(ctx)
 		if !ok {
 			return nil, status.Error(codes.PermissionDenied, "access denied")
