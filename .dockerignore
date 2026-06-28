@@ -32,8 +32,15 @@ __MACOSX/
 /sandbox/
 /tools/
 
-# RSA-ключи для запуска Агента/Сервера
+# Environment files and local secrets
+.env
+.env.*
+
+# RSA-ключи шифрования HTTP-запросов
 /.keys/
+
+# сертификаты и ключи gRPC TLS
+/.certs/
 
 # JSON-конфиги Агента и Сервера (example-конфиги тут не нужны)
 /configs/

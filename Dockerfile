@@ -41,7 +41,7 @@ COPY migrations /app/migrations
 
 USER appuser
 
-EXPOSE 8080
+EXPOSE 8080 50051
 
 ENTRYPOINT ["/app/server"]
 

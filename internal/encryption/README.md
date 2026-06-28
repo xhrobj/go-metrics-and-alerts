@@ -1,27 +1,51 @@
 # internal/encryption
 
-Пакет содержит загрузку RSA-ключей и гибридное шифрование сообщений с использованием RSA-OAEP и AES-GCM.
+Пакет загружает RSA-ключи из PEM-файлов и реализует гибридное шифрование сообщений с использованием RSA-OAEP и AES-GCM. Шифрование применяется при передаче метрик по HTTP.
+
+## Схема шифрования
+
+Для каждого сообщения Агент:
+
+1. генерирует случайный 256-битный AES-ключ
+2. создаёт случайный nonce необходимого для AES-GCM размера
+3. шифрует исходные данные с помощью AES-GCM
+4. шифрует AES-ключ публичным RSA-ключом через RSA-OAEP с SHA-256
+5. сериализует результат в JSON-конверт с полями `key`, `nonce` и `data`
+
+Сервер выполняет обратные операции: расшифровывает AES-ключ приватным RSA-ключом, а затем расшифровывает данные с помощью AES-GCM.
+
+HTTP-транспорт обозначает зашифрованное тело заголовком `Content-Encryption` со значением `rsa-aes-gcm`. Имя заголовка объявлено в пакете `internal/protocol`, а значение схемы находится в пакете `internal/encryption`.
+
+## Форматы ключей
+
+Для публичных RSA-ключей поддерживаются форматы:
+
+- PKIX
+- PKCS#1
+
+Для приватных RSA-ключей поддерживаются форматы:
+
+- PKCS#8
+- PKCS#1
 
 ## Ключи для тестов
 
-Пакет `internal/encryption/testkeys` при каждом запуске теста:
+Функция `testkeys.Generate(t)` из пакета `internal/encryption/testkeys` при каждом вызове:
 
 - генерирует временную RSA-пару
 - записывает публичный ключ в формате PKIX
 - записывает приватный ключ в формате PKCS#8
-- сохраняет PEM-файлы в `t.TempDir()`
+- сохраняет PEM-файлы в каталоге, созданном через `t.TempDir()`
 
 Временные файлы автоматически удаляются после завершения теста.
 
 ## Ключи для локального запуска
 
-Локальную RSA-пару для запуска Агента и Сервера можно создать командой:
-
 ```bash
 make crypto-keys
 ```
 
-Ключи сохраняются в игнорируемом Git каталоге:
+Команда при необходимости создаёт RSA-пару в каталоге `.keys/`, игнорируемом Git:
 
 ```text
 .keys/
@@ -39,41 +63,31 @@ make run-server-crypto
 make run-agent-crypto
 ```
 
-## Ручная генерация этой пары ключей
+## Ручная генерация ключей
 
-Ну и напоминалка как сгенерить ключи руками (не из `Makefile`).
-
-1. Генерируем приватный RSA-ключ:
+Создание каталога:
 
 ```bash
-openssl genrsa \
-  -out .keys/private.pem \
-  2048
+mkdir -p .keys
 ```
 
-2. Получаем публичный ключ из приватного:
+Приватный ключ:
 
 ```bash
-openssl rsa \
-  -in .keys/private.pem \
-  -pubout \
-  -out .keys/public.pem
+openssl genrsa -out .keys/private.pem 2048
 ```
 
-3. Проверка, что публичный ключ соответствует приватному:
+Публичный ключ:
 
 ```bash
-openssl pkey \
-  -in .keys/private.pem \
-  -pubout \
-  -outform DER |
-openssl sha256
+openssl rsa -in .keys/private.pem -pubout -out .keys/public.pem
+```
 
-openssl pkey \
-  -pubin \
-  -in .keys/public.pem \
-  -outform DER |
-openssl sha256
+Проверка соответствия пары:
+
+```bash
+openssl pkey -in .keys/private.pem -pubout -outform DER | openssl sha256
+openssl pkey -pubin -in .keys/public.pem -outform DER | openssl sha256
 ```
 
 Обе команды должны вывести одинаковый SHA-256.
